@@ -1,0 +1,23 @@
+# Python
+venv_appsupervise/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# VS Code
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Python virtual environment
+*.env
+.env/
