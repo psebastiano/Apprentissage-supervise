@@ -597,62 +597,69 @@ def pretraitement(test_df, train_df):
 
     return train_df_prepare, test_df_prepare
 
-def run_training_exo_1(data, train, test, if_show=True):
-    biais_range = [-1, 1]
-    perceptron = f_init_rand(train, biais_range)
-    
-    #Entrainement
-    eta = 0.1
-    maxIter = 5000
-    trained_perceptron, _ ,training_errors = perceptron_online(perceptron, train, eta, maxIter) #La fonction retourne aussi le nombre d'itérations
-       
-    fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
-    draw_curve(ax_2d, training_errors, "Erreur d'apprentissage", color='red')
-    #Empty : True - f : False
-    
-    #Affichage porjection 3D pour visualisation de la convergence
-    fig_3d = plt.figure(figsize=(12, 10))
-    ax_3d = fig_3d.add_subplot(111, projection='3d')
+def run_training_exo_1(data, train, test, train_prepare, test_prepare, question_tag, if_show=True):
+        biais_range = [-1, 1]
+        perceptron = f_init_rand(train, biais_range)
+        
+        #Entrainement
+        eta = 0.1
+        maxIter = 10000
+        trained_perceptron, _ ,training_errors = perceptron_online(perceptron, train_prepare, eta, maxIter) #La fonction retourne aussi le nombre d'itérations
+        
+        fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
+        draw_curve(ax_2d, training_errors, f"Erreur d'apprentissage - {question_tag}", color='red')
+        fig_2d.savefig(f"Erreur d'apprentissage - {question_tag}.png")
+        plt.close(fig_2d)
 
-    pca, scaler = draw_data_points_3D(ax_3d, train)
-    draw_perceptron_plane_3D(ax_3d, data, perceptron, pca, scaler, color='red', label='Perceptron état initial')
-    draw_perceptron_plane_3D(ax_3d, data, trained_perceptron, pca, scaler, color='blue', label='Perceptron état final')
-    ax_3d.set_title('Etat initial et Séparation du Perceptron dans l\'Espace PCA 3D')
-    ax_3d.legend()
+        #Affichage projection 3D pour visualisation de la convergence
+        fig_3d = plt.figure(figsize=(12, 10))
+        ax_3d = fig_3d.add_subplot(111, projection='3d')
 
-    #Calcul de l'erreur
-    training_error = error(train, trained_perceptron)
-    generalisation_error = error(test, trained_perceptron)
-    
-    print("Erreur d'entraînement : ", training_error)
-    print('Error de généralisation : ', generalisation_error)
+        pca, scaler = draw_data_points_3D(ax_3d, train)
+        draw_perceptron_plane_3D(ax_3d, data, perceptron, pca, scaler, color='red', label='Perceptron état initial')
+        draw_perceptron_plane_3D(ax_3d, data, trained_perceptron, pca, scaler, color='blue', label='Perceptron état final')
+        ax_3d.set_title(f'Etat initial et Séparation du Perceptron dans l\'Espace PCA 3D - {question_tag}')
+        ax_3d.legend()
+        fig_3d.savefig(f'Etat initial et Séparation du Perceptron dans l\'Espace PCA 3D - {question_tag}.png')
+        #Calcul de l'erreur
+        training_error = error(train_prepare, trained_perceptron)
+        generalisation_error = error(test_prepare, trained_perceptron)
+        
+        print("Erreur d'entraînement : ", training_error)
+        print('Error de généralisation : ', generalisation_error)
 
-    #Calcul des stabilités
-    stabilites_paires = stabilites(train, trained_perceptron)
-    
-    stabilites_list=[]
-    for paire in stabilites_paires:
-        stabilites_list.append(paire[1])
-    
-    xlabel="Exemple p"
-    ylabel="Stabilite p"
-    fig_stabilites, ax_stabilites = plt.subplots(figsize=(12, 10))
-    draw_scatter_plot(ax_stabilites, stabilites_list, 
-                      "Stabilites des exemples d'apprentissage", 
-                      color='red',
-                      xlabel=xlabel,
-                      ylabel=ylabel)
-    #Empty : True - f : False
-    ax_stabilites.legend()
-    show(if_show)
+        #Calcul des stabilités
+        stabilites_paires = stabilites(train_prepare, trained_perceptron)
+        
+        stabilites_list=[]
+        for paire in stabilites_paires:
+            stabilites_list.append(paire[1])
+        
+        xlabel="Exemple p"
+        ylabel="Stabilite p"
+        fig_stabilites, ax_stabilites = plt.subplots(figsize=(12, 10))
+        draw_scatter_plot(ax_stabilites, stabilites_list, 
+                        f"Stabilites des exemples d'apprentissage - {question_tag}", 
+                        color='red',
+                        xlabel=xlabel,
+                        ylabel=ylabel)
+        #Empty : True - f : False
+        ax_stabilites.legend()
+        fig_stabilites.savefig(f"Stabilites des exemples d'apprentissage - {question_tag}.png")
+        
+        if if_show:
+            plt.show()
+        else:
+            plt.close(fig_3d)  # Close 3D figure
+            plt.close(fig_stabilites)
 
-    return (trained_perceptron,
-            training_error,
-            generalisation_error,
-            stabilites_paires,
-            stabilites_list,
-    )
-#Variable générale
+        return (trained_perceptron,
+                training_error,
+                generalisation_error,
+                stabilites_paires,
+                stabilites_list,
+        )
+    #Variable générale
 f = False
 
 if __name__=="__main__":
@@ -664,12 +671,22 @@ if __name__=="__main__":
     train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
 
     #ENTRAINTEMENT PARTIE I
-    # Question 2
-    #trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df, train=train_df_prepare, test=test_df_prepare)
-
-    # Question 2
-    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df, train=test_df_prepare, test=train_df_prepare)
-
+    # Question 2_a
+    question_tag_exo_2 = 'Q2'
+    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df, 
+                                                                                                                      train=train_df, 
+                                                                                                                      test=test_df, 
+                                                                                                                      train_prepare=train_df_prepare,
+                                                                                                                      test_prepare=test_df_prepare,
+                                                                                                                      question_tag=question_tag_exo_2)
+    # Question 2_a
+    question_tag_exo_3 = 'Q3'
+    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df, 
+                                                                                                                      train=test_df, 
+                                                                                                                      test=train_df, 
+                                                                                                                      train_prepare=test_df_prepare,
+                                                                                                                      test_prepare=train_df_prepare,
+                                                                                                                      question_tag=question_tag_exo_3)
 
     #Initialisation d'un perceptron
 
