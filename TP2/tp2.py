@@ -191,6 +191,62 @@ def perceptron_online(w_vect, L_ens, eta, maxIter):
     #print("in perceptron online - return")
     return w_k, stop-1, err
 
+def perceptron_batch(w_vect, L_ens, eta, maxIter):
+    if isinstance(L_ens, pd.DataFrame):
+        print("[Avertissement] Conversion du DataFrame en Liste pour la fonction d'initialisation.")
+
+        # Le DataFrame est converti en une liste de [features, target]
+        L_ens_converted = []
+        for index, row in L_ens.iterrows():
+            L_ens_converted.append([row['Donnee'], row['Classe voulue']])
+        L_ens = L_ens_converted
+        #print("in perceptron online")  #print("in perceptron online")
+
+    w_k = copy.deepcopy(w_vect)
+    stop = 0
+
+    delta_w = np.zeros(len(w_vect))
+
+    err = []
+    err.append(error(L_ens, w_vect))
+
+    while stop < maxIter:     # boucle sur les époques
+        #print('\n'*2, '_'*20, '\n')
+        #print("stop =", stop)
+        nb_mal_classe = 0
+        err.append(error(L_ens, w_k))
+        delta_w = np.zeros(len(w_vect))
+
+        for k in range(len(L_ens)):   # boucle sur les exemples
+            x_k = L_ens[k][0]
+            t = L_ens[k][1]
+
+            # produit scalaire
+            w_k_scal_x_k = sum(w_k[i] * x_k[i] for i in range(len(x_k)))
+            y = 1 if w_k_scal_x_k > 0 else -1
+
+            #print("y = ", y)
+            #print("t = ", t)
+
+            if y != t:
+                for i in range(len(x_k)):
+                    delta_w[i] = delta_w[i] + eta * (t - y)*x_k[i]
+                nb_mal_classe += 1
+
+        # fin de l'époque : vérification arrêt
+        w_k += delta_w
+
+        if nb_mal_classe == 0:
+            #print("Convergence atteinte.")
+            stop += 1
+            break
+        else:
+            #print("nb_mal_classe : ", nb_mal_classe)
+            stop += 1
+
+    #print("in perceptron batch - return")
+    return w_k, stop-1, err
+
 def draw_curve(ax, list, label_text, color='black', xlabel='', ylabel='', linewidth=2):
     """
     Trace une courbe d'erreur (ou de performance) sur un objet Axes existant.
@@ -597,14 +653,14 @@ def pretraitement(test_df, train_df):
 
     return train_df_prepare, test_df_prepare
 
-def run_training_exo_1(data, train, test, train_prepare, test_prepare, question_tag, if_show=True):
+def run_training_exo_1(data, training_algo, train, test, train_prepare, test_prepare, question_tag, if_show=True):
         biais_range = [-1, 1]
         perceptron = f_init_rand(train, biais_range)
         
         #Entrainement
         eta = 0.1
         maxIter = 10000
-        trained_perceptron, _ ,training_errors = perceptron_online(perceptron, train_prepare, eta, maxIter) #La fonction retourne aussi le nombre d'itérations
+        trained_perceptron, _ ,training_errors = training_algo(perceptron, train_prepare, eta, maxIter) #La fonction retourne aussi le nombre d'itérations
         
         fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
         draw_curve(ax_2d, training_errors, f"Erreur d'apprentissage - {question_tag}", color='red')
@@ -670,10 +726,13 @@ if __name__=="__main__":
     #PRETRAITEMENT
     train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
 
-    #ENTRAINTEMENT PARTIE I
+    #ENTRAINTEMENT
+    #L'algorithme online converge en moins d'itération que l'algorithme batch
+    training_algo = perceptron_online
     # Question 2_a
     question_tag_exo_2 = 'Q2'
-    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df, 
+    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df,
+                                                                                                                      training_algo=training_algo, 
                                                                                                                       train=train_df, 
                                                                                                                       test=test_df, 
                                                                                                                       train_prepare=train_df_prepare,
@@ -681,7 +740,8 @@ if __name__=="__main__":
                                                                                                                       question_tag=question_tag_exo_2)
     # Question 2_a
     question_tag_exo_3 = 'Q3'
-    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df, 
+    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df,
+                                                                                                                      training_algo=training_algo,  
                                                                                                                       train=test_df, 
                                                                                                                       test=train_df, 
                                                                                                                       train_prepare=test_df_prepare,
