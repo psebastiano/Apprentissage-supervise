@@ -297,6 +297,35 @@ def draw_scatter_plot(ax, data_list, label_text, color='black',
     # Optionnel : Ajout d'une grille pour la lisibilité
     ax.grid(True, linestyle='--', alpha=0.6)
 
+def pocket_algorithm(X, t, max_iter=1000):
+   
+
+    # Initialisation des poids
+    w = np.zeros(X.shape[1])
+    w_best = w.copy()
+   
+    def errors(w):
+        predictions = signe(np.dot(X,w))
+        return np.sum(predictions != t)
+
+    best_errors = errors(w_best)
+
+    for _ in range(max_iter):
+        for xi, ti in zip(X, t):
+            yi=np.sign(np.dot(w, xi)) 
+            if ti!= yi:
+                w = w + (ti-yi) * xi 
+                
+                current_errors = errors(w)
+                
+                # Mise à jour de la "poche"
+                if current_errors < best_errors:
+                    w_best = w.copy()
+                    best_errors = current_errors
+
+    return w_best
+
+
 def project_data_on_2D(data):
     X = np.array(data['Donnee'].tolist())
     y = data['Classe voulue'].map({'M': 1, 'R': -1}).values # Utilisons les étiquettes numériques
