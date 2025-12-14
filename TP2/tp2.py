@@ -858,7 +858,7 @@ if __name__=="__main__":
     # Paramètres d'apprentissage
     biais_range = [-1, 1]
     eta = 0.1
-    maxIter = 2000
+    maxIter = 10000
     
     # ========================================================================
     # PARTIE I: Apprentissage sur train, test sur test (et vice versa)
@@ -1139,3 +1139,7 @@ if __name__=="__main__":
     print("\n" + "="*80)
     print("FIN DU TP2")
     print("="*80)
+
+
+
+    
