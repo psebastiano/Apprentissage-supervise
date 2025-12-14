@@ -159,7 +159,7 @@ def perceptron_online(w_vect, L_ens, eta, maxIter):
         #print("in perceptron online")
 
     w_k = copy.deepcopy(w_vect)
-    # print('perceptron avant entraintement : ', w_k)  # Commenté pour réduire la verbosité
+    # print('perceptron avant entraintement : ', w_k)
     stop = 0
     err = []
     err.append(error(L_ens, w_vect))
@@ -200,6 +200,111 @@ def perceptron_online(w_vect, L_ens, eta, maxIter):
     #print("in perceptron online - return")
     return w_k, stop-1, err
 
+def perceptron_batch(w_vect, L_ens, eta, maxIter):
+    if isinstance(L_ens, pd.DataFrame):
+        print("[Avertissement] Conversion du DataFrame en Liste pour la fonction d'initialisation.")
+
+        # Le DataFrame est converti en une liste de [features, target]
+        L_ens_converted = []
+        for index, row in L_ens.iterrows():
+            L_ens_converted.append([row['Donnee'], row['Classe voulue']])
+        L_ens = L_ens_converted
+        #print("in perceptron online")  #print("in perceptron online")
+
+    w_k = copy.deepcopy(w_vect)
+    stop = 0
+
+    delta_w = np.zeros(len(w_vect))
+
+    err = []
+    err.append(error(L_ens, w_vect))
+
+    while stop < maxIter:     # boucle sur les époques
+        #print('\n'*2, '_'*20, '\n')
+        #print("stop =", stop)
+        nb_mal_classe = 0
+        err.append(error(L_ens, w_k))
+        delta_w = np.zeros(len(w_vect))
+
+        for k in range(len(L_ens)):   # boucle sur les exemples
+            x_k = L_ens[k][0]
+            t = L_ens[k][1]
+
+            # produit scalaire
+            w_k_scal_x_k = sum(w_k[i] * x_k[i] for i in range(len(x_k)))
+            y = 1 if w_k_scal_x_k > 0 else -1
+
+            #print("y = ", y)
+            #print("t = ", t)
+
+            if y != t:
+                for i in range(len(x_k)):
+                    delta_w[i] = delta_w[i] + eta * (t - y)*x_k[i]
+                nb_mal_classe += 1
+
+        # fin de l'époque : vérification arrêt
+        w_k += delta_w
+
+        if nb_mal_classe == 0:
+            #print("Convergence atteinte.")
+            stop += 1
+            break
+        else:
+            #print("nb_mal_classe : ", nb_mal_classe)
+            stop += 1
+
+    #print("in perceptron batch - return")
+    return w_k, stop-1, err
+
+def draw_curve(ax, list, label_text, color='black', xlabel='', ylabel='', linewidth=2):
+    """
+    Trace une courbe d'erreur (ou de performance) sur un objet Axes existant.
+
+    Args:
+        ax (matplotlib.axes.Axes): L'objet Axes 2D existant.
+        error_list (list/np.ndarray): La liste des valeurs d'erreur/performance à tracer.
+        label_text (str): Le texte à utiliser pour la légende de cette courbe.
+        color (str): La couleur de la ligne (ex: 'blue', 'red', '#FF5733').
+        linewidth (int/float): L'épaisseur de la ligne.
+    """
+    
+    # L'axe X est l'index de la liste (0, 1, 2, ... correspondant aux itérations/époques)
+    iterations = range(1, len(list) + 1)
+    
+    # Tracé de la ligne
+    ax.plot(iterations, 
+            list, 
+            label=label_text, 
+            color=color, 
+            linewidth=linewidth)
+    
+    # Configuration des labels des axes (peut être fait ici si toujours les mêmes)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    
+    # Optionnel : Ajout d'une grille pour la lisibilité
+    ax.grid(True, linestyle='--', alpha=0.6)
+
+def draw_scatter_plot(ax, data_list, label_text, color='black', 
+                      xlabel='', ylabel='', marker='o', s=50):
+    # L'axe X est toujours l'index de la liste (correspondant aux itérations ou numéros d'échantillon)
+    x_indices = range(1, len(data_list) + 1)
+    
+    # Tracé des points (scatter plot)
+    ax.scatter(x_indices, 
+               data_list, 
+               label=label_text, 
+               color=color, 
+               marker=marker, 
+               s=s,
+               alpha=0.7) # Ajout d'une légère transparence pour les points
+
+    # Configuration des labels des axes (en utilisant les paramètres passés)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    
+    # Optionnel : Ajout d'une grille pour la lisibilité
+    ax.grid(True, linestyle='--', alpha=0.6)
 
 def calculate_stability(L, w):
     """Calcule les stabilités (gamma) des exemples selon la formule:
@@ -520,6 +625,32 @@ def visualize_perceptron_3D(data_df, w_initial, w_trained, title="Hyperplan sép
     plt.tight_layout()
     return fig, ax
     
+def stabilite(w, x, tau):
+    return (tau*np.dot(w,x))/np.linalg.norm(w)
+
+def stabilites(L, w):
+    """ Calcul de la distance des exemples à l'hyperplan séparateur """
+    if isinstance(L, pd.DataFrame):
+        print("[Avertissement] Conversion du DataFrame en Liste pour la fonction d'initialisation.")
+        # Le DataFrame est converti en une liste de [features, target]
+        L_converted = []
+    
+    for index, row in L.iterrows():
+        L_converted.append([row['Donnee'], row['Classe voulue']])
+        L = L_converted
+
+    y = []
+    X = []
+    stabilites = []
+
+    for exemple in L:
+        X.append(exemple[0]) #Exemple (Features)
+        y.append(exemple[1]) #Classe réelle
+    
+    for i in range(len(X)):
+        stabilites.append([X[i], stabilite(w, X[i], y[i])])# print('i : ', i)
+
+    return stabilites
 
 def project_data_on_3D(data):
     """Projection 3D avec PCA manuelle"""
@@ -755,41 +886,12 @@ def print_weights(w, title="Poids du perceptron"):
     print(f"{'='*60}\n")
 
 
-
-if __name__=="__main__":
-
-    #IMPORTATION DONNEES
-
+def import_data():
     raw_dict = parse_custom_file('./sonar.mines', 9)
     mines_dict = clean_sonar_dict(raw_dict)
 
-
-    # # l0=60
-    # # c = 0
-    # for key in sonar_dict.keys():
-    #     print(key)
-        
-    #     l1=len(sonar_dict[f'{key}'])
-    #     if l1 != l0:
-    #         print(f'error. line {l1} différente de la précédente')
-    #         print(sonar_dict[f'{key}'])
-    #     c+=1
-    # print(c)
-
     raw_dict = parse_custom_file('./sonar.rocks', 8) #Ce fichier n'a que 8 lignes au début
     rocks_dict = clean_sonar_dict(raw_dict)
-
-    # c=0
-    # for key in sonar_dict.keys():
-    #     print(key)
-        
-    #     l1=len(sonar_dict[f'{key}'])
-    #     if l1 != l0:
-    #         print(f'error. line {l1} différente de la précédente')
-    #         print(sonar_dict[f'{key}'])
-    #     c+=1
-    # print(c)
-
 
     data=[]
 
@@ -830,8 +932,9 @@ if __name__=="__main__":
     train_df = pd.DataFrame(train_list)
     test_df = pd.DataFrame(test_list)
 
-    #PRETRAITEMENT
+    return data_df, test_df, train_df
 
+def pretraitement(test_df, train_df):
     # 1 - Remove Col ID
     test_df_prepare = test_df.drop('ID', axis=1)
     train_df_prepare = train_df.drop('ID', axis=1)
@@ -840,8 +943,108 @@ if __name__=="__main__":
     mapping_classes = {'M': 1, 'R': -1}
     train_df_prepare['Classe voulue'] = train_df_prepare['Classe voulue'].map(mapping_classes)
     test_df_prepare['Classe voulue'] = test_df_prepare['Classe voulue'].map(mapping_classes)
+    
+    return train_df_prepare,test_df_prepare
+    
 
-    # Créer l'ensemble complet L = train + test
+def run_training_exo_1(data, training_algo, train, test, train_prepare, test_prepare, question_tag, if_show=True):
+        biais_range = [-1, 1]
+        perceptron = f_init_rand(train, biais_range)
+        
+        #Entrainement
+        eta = 0.1
+        maxIter = 10000
+        trained_perceptron, _ ,training_errors = training_algo(perceptron, train_prepare, eta, maxIter) #La fonction retourne aussi le nombre d'itérations
+        
+        fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
+        draw_curve(ax_2d, training_errors, f"Erreur d'apprentissage - {question_tag}", color='red')
+        fig_2d.savefig(f"Erreur d'apprentissage - {question_tag}.png")
+        plt.close(fig_2d)
+
+        #Affichage projection 3D pour visualisation de la convergence
+        fig_3d = plt.figure(figsize=(12, 10))
+        ax_3d = fig_3d.add_subplot(111, projection='3d')
+
+        pca, scaler = draw_data_points_3D(ax_3d, train)
+        draw_perceptron_plane_3D(ax_3d, data, perceptron, pca, scaler, color='red', label='Perceptron état initial')
+        draw_perceptron_plane_3D(ax_3d, data, trained_perceptron, pca, scaler, color='blue', label='Perceptron état final')
+        ax_3d.set_title(f'Etat initial et Séparation du Perceptron dans l\'Espace PCA 3D - {question_tag}')
+        ax_3d.legend()
+        fig_3d.savefig(f'Etat initial et Séparation du Perceptron dans l\'Espace PCA 3D - {question_tag}.png')
+        #Calcul de l'erreur
+        training_error = error(train_prepare, trained_perceptron)
+        generalisation_error = error(test_prepare, trained_perceptron)
+        
+        print("Erreur d'entraînement : ", training_error)
+        print('Error de généralisation : ', generalisation_error)
+
+        #Calcul des stabilités
+        stabilites_paires = stabilites(train_prepare, trained_perceptron)
+        
+        stabilites_list=[]
+        for paire in stabilites_paires:
+            stabilites_list.append(paire[1])
+        
+        xlabel="Exemple p"
+        ylabel="Stabilite p"
+        fig_stabilites, ax_stabilites = plt.subplots(figsize=(12, 10))
+        draw_scatter_plot(ax_stabilites, stabilites_list, 
+                        f"Stabilites des exemples d'apprentissage - {question_tag}", 
+                        color='red',
+                        xlabel=xlabel,
+                        ylabel=ylabel)
+        #Empty : True - f : False
+        ax_stabilites.legend()
+        fig_stabilites.savefig(f"Stabilites des exemples d'apprentissage - {question_tag}.png")
+        
+        if if_show:
+            plt.show()
+        else:
+            plt.close(fig_3d)  # Close 3D figure
+            plt.close(fig_stabilites)
+
+        return (trained_perceptron,
+                training_error,
+                generalisation_error,
+                stabilites_paires,
+                stabilites_list,
+        )
+    #Variable générale
+f = False
+
+if __name__=="__main__":
+
+    #IMPORTATION DONNEES
+    data_df, test_df, train_df = import_data()
+
+    #PRETRAITEMENT
+    train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
+
+    #ENTRAINTEMENT
+    #L'algorithme online converge en moins d'itération que l'algorithme batch
+    training_algo = perceptron_online
+    # Question 2_a
+    question_tag_exo_2 = 'Q2'
+    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df,
+                                                                                                                      training_algo=training_algo, 
+                                                                                                                      train=train_df, 
+                                                                                                                      test=test_df, 
+                                                                                                                      train_prepare=train_df_prepare,
+                                                                                                                      test_prepare=test_df_prepare,
+                                                                                                                      question_tag=question_tag_exo_2)
+    # Question 2_a
+    question_tag_exo_3 = 'Q3'
+    trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df,
+                                                                                                                      training_algo=training_algo,  
+                                                                                                                      train=test_df, 
+                                                                                                                      test=train_df, 
+                                                                                                                      train_prepare=test_df_prepare,
+                                                                                                                      test_prepare=train_df_prepare,
+                                                                                                                      question_tag=question_tag_exo_3)
+
+    #Initialisation d'un perceptron
+
+# Créer l'ensemble complet L = train + test
     complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
     
     print(f"\n{'='*80}")
@@ -1139,7 +1342,6 @@ if __name__=="__main__":
     print("\n" + "="*80)
     print("FIN DU TP2")
     print("="*80)
-
 
 
     
