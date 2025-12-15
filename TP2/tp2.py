@@ -306,43 +306,6 @@ def signe(x):
     else:
         return -1
 
-def error_J_wrong (L, w):
-    """Calcule l'erreur d'apprentissage du perceptron sur l'ensemble d'entraînement
-    
-    Args:
-        - L : l'ensemble d'apprentissage
-        - w : le perceptron entrainté
-    """
-    if isinstance(L, pd.DataFrame):
-        print("[Avertissement] Conversion du DataFrame en Liste pour la fonction d'initialisation.")
-        # Le DataFrame est converti en une liste de [features, target]
-        L_converted = []
-    
-        for index, row in L.iterrows():
-            L_converted.append([row['Donnee'], row['Classe voulue']])
-            L = L_converted
-
-    y = []
-    X = []
-    err = 0
-
-    for exemple in L:
-        X.append(exemple[0]) #Exemple (Features)
-        y.append(exemple[1]) #Classe réelle
-
-    # n()
-    # print(range(len(X)))
-    # n()
-
-    for i in range(len(X)):
-        # print('i : ', i)
-        # print('y[i] : ',  y[i])
-        # print('X[i] : ',  X[i])
-        
-        err += (y[i] - signe(np.dot(w,X[i])))**2
-
-    return err
-
 def error (L, w):
     """Calcule l'erreur d'apprentissage du perceptron sur l'ensemble d'entraînement
     
@@ -733,248 +696,6 @@ def pocket_algorithm(L_ens, w_init, eta, max_iter=1000, target_error=None):
             break
     
     return w_best, best_error, iterations, error_history
-
-def standardize_features(X):
-    """Standardisation manuelle des caractéristiques"""
-    mean = np.mean(X, axis=0)
-    std = np.std(X, axis=0)
-    std = np.where(std == 0, 1.0, std)  # Éviter division par zéro
-    X_scaled = (X - mean) / std
-    return X_scaled, mean, std
-
-def pca_project_sklearn(X, n_components=3, pca_model=None, scaler_mean=None, scaler_std=None, standardize=True):
-    """
-    Fonction PCA polyvalente utilisant scikit-learn.
-    
-    Args:
-        X (np.ndarray): données (n_samples, n_features)
-        n_components (int): nombre de composantes principales
-        pca_model (PCA): modèle PCA pré-entraîné
-        scaler_mean (np.ndarray): moyenne pour standardisation
-        scaler_std (np.ndarray): écart-type pour standardisation
-        standardize (bool): si True, standardiser les données
-        
-    Returns:
-        X_projected (np.ndarray): données projetées
-        pca_model (PCA): modèle PCA
-        explained_variance (np.ndarray): variance expliquée par composante
-        scaler_mean (np.ndarray): moyenne utilisée
-        scaler_std (np.ndarray): écart-type utilisé
-    """
-    X = np.asarray(X, dtype=float)
-    
-    # Standardisation
-    if standardize:
-        if scaler_mean is None or scaler_std is None:
-            scaler_mean = np.mean(X, axis=0)
-            scaler_std = np.std(X, axis=0)
-            # CORRECTION ICI : utiliser 'scaler_std' au lieu de 'std'
-            scaler_std = np.where(scaler_std == 0, 1.0, scaler_std)  # <-- CORRIGÉ
-        X_scaled = (X - scaler_mean) / scaler_std
-    else:
-        if scaler_mean is None:
-            scaler_mean = np.mean(X, axis=0)
-        X_scaled = X - scaler_mean
-        if scaler_std is None:
-            scaler_std = np.ones(X.shape[1])
-    
-    # PCA - Fit ou Transform
-    if pca_model is None:
-        pca_model = PCA(n_components=n_components)
-        X_projected = pca_model.fit_transform(X_scaled)
-    else:
-        X_projected = pca_model.transform(X_scaled)
-    
-    explained_variance = pca_model.explained_variance_ratio_
-    
-    return X_projected, pca_model, explained_variance, scaler_mean, scaler_std
-
-def project_data_on_2D(data, pca_model=None, scaler_mean=None, scaler_std=None):
-    """
-    Projection 2D avec PCA.
-    
-    Args:
-        data: DataFrame avec 'Donnee' et 'Classe voulue'
-        pca_model: modèle PCA pré-entraîné (optionnel)
-        scaler_mean: moyenne de standardisation (optionnel)
-        scaler_std: écart-type de standardisation (optionnel)
-        
-    Returns:
-        pca_model, scaler_mean, scaler_std (pour réutilisation)
-    """
-    # Préparation des données
-    X = np.array(data['Donnee'].tolist())
-    y = data['Classe voulue'].map({'M': 1, 'R': -1}).values
-    X_features = X[:, 1:]  # Exclure le biais
-    
-    # PCA avec la fonction unifiée
-    X_2d, pca_model, explained_variance, scaler_mean, scaler_std = pca_project_sklearn(
-        X_features, 
-        n_components=2,
-        pca_model=pca_model,
-        scaler_mean=scaler_mean,
-        scaler_std=scaler_std,
-        standardize=True
-    )
-    
-    # Séparation par classe
-    X_mines = X_2d[y == 1]
-    X_rocks = X_2d[y == -1]
-    
-    # Visualisation
-    plt.figure(figsize=(10, 8))
-    plt.scatter(X_mines[:, 0], X_mines[:, 1], 
-                label='Mine (M)', marker='o', color='red', alpha=0.6)
-    plt.scatter(X_rocks[:, 0], X_rocks[:, 1], 
-                label='Roche (R)', marker='x', color='blue', alpha=0.6)
-    
-    plt.xlabel(f'PC 1 ({explained_variance[0]*100:.2f}%)')
-    plt.ylabel(f'PC 2 ({explained_variance[1]*100:.2f}%)')
-    plt.title('Projection 2D du Sonar Data (Mines vs Roches) via PCA')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-    
-    return pca_model, scaler_mean, scaler_std
-
-def draw_data_points_3D(ax, data_df, pca_model=None, scaler_mean=None, scaler_std=None):
-    """
-    Projette les données dans l'espace 3D PCA et trace les points.
-    
-    Returns:
-        pca_model, scaler_mean, scaler_std, X_3d
-    """
-    # Préparation des données
-    X = np.array(data_df['Donnee'].tolist())
-    y = data_df['Classe voulue'].map({'M': 1, 'R': -1}).values
-    X_features = X[:, 1:]  # Exclure le biais
-    
-    # Utilisation de la fonction PCA unifiée
-    X_3d, pca_model, explained_variance, scaler_mean, scaler_std = pca_project_sklearn(
-        X_features,
-        n_components=3,
-        pca_model=pca_model,
-        scaler_mean=scaler_mean,
-        scaler_std=scaler_std,
-        standardize=True
-    )
-    
-    # Séparation par classe
-    X_mines = X_3d[y == 1]
-    X_rocks = X_3d[y == -1]
-    
-    # Tracé 3D
-    ax.scatter(X_mines[:, 0], X_mines[:, 1], X_mines[:, 2],
-               label='Mine (M)', marker='o', color='red', alpha=0.7, s=50)
-    ax.scatter(X_rocks[:, 0], X_rocks[:, 1], X_rocks[:, 2],
-               label='Roche (R)', marker='x', color='blue', alpha=0.7, s=50)
-    
-    # Labels des axes
-    ax.set_xlabel(f'PC 1 ({explained_variance[0]*100:.2f}%)')
-    ax.set_ylabel(f'PC 2 ({explained_variance[1]*100:.2f}%)')
-    ax.set_zlabel(f'PC 3 ({explained_variance[2]*100:.2f}%)')
-    
-    # Transpose components to shape (n_features_original, n_components)
-    return pca_model.components_.T, scaler_mean, scaler_std, X_3d
-
-def draw_perceptron_plane_3D(ax, X_3d, perceptron, pca_components, scaler_mean, scaler_std, color='red', label='Hyperplan'):
-    """
-    Trace l'hyperplan du perceptron dans l'espace 3D PCA.
-    
-    Args:
-        ax: axe 3D
-        X_3d: données projetées en 3D (n_samples, 3)
-        perceptron: modèle de perceptron
-        pca_components: matrice de composantes PCA (n_features_original, 3)
-        scaler_mean: moyenne de standardisation (n_features_original,)
-        scaler_std: écart-type de standardisation (n_features_original,)
-    """
-    # Vérifier les dimensions
-    if pca_components is None or scaler_mean is None or scaler_std is None:
-        print("Attention: PCA components ou scaler non fournis, impossible de tracer l'hyperplan")
-        return
-    
-    # 1. Extraire les poids du perceptron
-    w = perceptron  # Shape: (n_features + 1, )
-    w_bias = w[0]     # Biais
-    w_features = w[1:]  # Poids des features, shape: (n_features_original,)
-    
-    # 3. Standardiser les poids (important!)
-    w_features_scaled = w_features / scaler_std
-    
-    # 4. Projection dans l'espace PCA
-    w_pca = w_features_scaled @ pca_components  # Shape: (3,)
-    
-    # 5. Construire le plan: w_pca·x + w_bias = 0
-    #    => w1*x + w2*y + w3*z + w_bias = 0
-    #    => z = (-w1*x - w2*y - w_bias) / w3
-    
-    # Générer une grille
-    x_min, x_max = X_3d[:, 0].min() - 1, X_3d[:, 0].max() + 1
-    y_min, y_max = X_3d[:, 1].min() - 1, X_3d[:, 1].max() + 1
-    
-    xx, yy = np.meshgrid(
-        np.linspace(x_min, x_max, 20),
-        np.linspace(y_min, y_max, 20)
-    )
-    
-    # Calculer z pour chaque point (x, y)
-    # w_pca[0]*x + w_pca[1]*y + w_pca[2]*z + w_bias = 0
-    # => z = (-w_pca[0]*x - w_pca[1]*y - w_bias) / w_pca[2]
-    
-    # Éviter la division par zéro
-    if abs(w_pca[2]) > 1e-10:
-        zz = (-w_pca[0] * xx - w_pca[1] * yy - w_bias) / w_pca[2]
-    else:
-        # Si w_pca[2] est proche de 0, le plan est presque vertical
-        # On peut afficher un plan à z constant
-        zz = np.zeros_like(xx)
-        print("Attention: Composante z du poids PCA proche de 0, plan vertical")
-    
-    # Tracer le plan
-    ax.plot_surface(xx, yy, zz, alpha=0.3, color=color, label=label)
-    
-    # Ajouter une légende
-    ax.text(x_min, y_max, zz.max(), label, color=color, fontsize=10)
-
-def visualize_perceptron_3D(data_df, w_initial, w_trained, title="Hyperplan séparateur du Perceptron"):
-    """
-    Visualise les données en 3D avec l'hyperplan séparateur du perceptron.
-    Version sans sklearn.
-    """
-    fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Dessiner les points de données
-    pca_components, scaler_mean, scaler_std, X_3d = draw_data_points_3D(ax, data_df)
-    
-    # Dessiner l'hyperplan initial (optionnel, en rouge clair)
-    if w_initial is not None:
-        draw_perceptron_plane_3D(ax, X_3d, w_initial, pca_components, scaler_mean, scaler_std,
-                               color='orange', alpha=0.2, label='Hyperplan initial')
-    
-    # Dessiner l'hyperplan entraîné (en vert, plus visible)
-    if w_trained is not None:
-        draw_perceptron_plane_3D(ax, X_3d, w_trained, pca_components, scaler_mean, scaler_std,
-                               color='green', alpha=0.5, label='Hyperplan séparateur (entraîné)')
-    
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    
-    # Créer une légende personnalisée
-    legend_elements = [
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', 
-                   markersize=10, label='Mine (M)', alpha=0.7),
-        plt.Line2D([0], [0], marker='x', color='blue', 
-                   markersize=10, label='Roche (R)', alpha=0.7),
-        Patch(facecolor='green', alpha=0.5, label='Hyperplan séparateur'),
-    ]
-    if w_initial is not None:
-        legend_elements.append(Patch(facecolor='orange', alpha=0.2, label='Hyperplan initial'))
-    
-    ax.legend(handles=legend_elements, loc='upper left')
-    
-    plt.tight_layout()
-    return fig, ax
     
 def stabilite(w, x, tau):
     return (tau*np.dot(w,x))/np.linalg.norm(w)
@@ -1384,7 +1105,12 @@ def question_5(train_df_prepare, test_df_prepare, training_algo, maxIter=10000):
 
     #Penser à plotter training_errors
     w_trained, n_iter, training_errors = training_algo(w_init, complete_df_prepare, eta, maxIter)
-        
+    
+    fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
+    draw_curve(ax_2d, training_errors, "Erreur d'apprentissage - Online - Ensemble complet", color='red')
+    fig_2d.savefig("Q5/Q5_Erreur d'apprentissage - Online - Ensemble complet.png")
+    plt.close(fig_2d)
+
     # print("CHECKPOINT 0")
     # n()
     # Calcul des erreurs
@@ -1441,11 +1167,11 @@ t = True
 if_question_2_et_3 = f
 # if_question_2_et_3 = t
 
-# if_question_4 = f
-if_question_4 = t
+if_question_4 = f
+# if_question_4 = t
 
-if_question_5 = f
-# if_question_5 = t
+# if_question_5 = f
+if_question_5 = t
 
 if_question_6 = f
 # if_question_6 = t
@@ -1648,11 +1374,11 @@ if __name__=="__main__":
         }
         display_and_save_results_table(results_pocket, 
                                        pocket_column_map,
-                                       filename='Q4/pocket_results_summary.png',
+                                       filename='Q4/Q4_pocket_results_summary.png',
                                        title='Résumé des résultats de l\'algorithme Pocket')
         
         display_and_save_matrix_table(perceptrons_trained,
-                                      "Q4/Poids perceptrons entrainés Pocket.png",
+                                      "Q4/Q4_Poids perceptrons entrainés Pocket.png",
                                       "Poids perceptrons entrainés Pocket",
                                       "Poid",
                                       "Perceptron test case")
@@ -1720,7 +1446,7 @@ if __name__=="__main__":
         if stabilites_generalisation_sur_test_matrix:
             display_and_save_matrix_table(
                 stabilites_generalisation_sur_test_matrix, 
-                "Q4/Stabilites_generalisation_des_8_perceptrons_entraines_sur_train_testes_sur_test.png", 
+                "Q4/Q4_Stabilites_generalisation_des_8_perceptrons_entraines_sur_train_testes_sur_test.png", 
                 "Stabilités de généralisation des 8 perceptrons (entraînés sur train, testés sur test)",
                 "Perceptron",  # Maintenant ce sera les lignes (après transposition)
                 "Patron",      # Maintenant ce sera les colonnes (après transposition)
@@ -1730,7 +1456,7 @@ if __name__=="__main__":
         if stabilites_generalisation_sur_train_matrix:
             display_and_save_matrix_table(
                 stabilites_generalisation_sur_train_matrix, 
-                "Q4/Stabilites_generalisation_des_8_perceptrons_entraines_sur_test_testes_sur_train.png", 
+                "Q4/Q4_Stabilites_generalisation_des_8_perceptrons_entraines_sur_test_testes_sur_train.png", 
                 "Stabilités de généralisation des 8 perceptrons (entraînés sur test, testés sur train)",
                 "Perceptron",  # Maintenant ce sera les lignes (après transposition)
                 "Patron",      # Maintenant ce sera les colonnes (après transposition)
@@ -1747,7 +1473,7 @@ if __name__=="__main__":
         question_tag_exo_5 = 'EXERCICE 5'
         
         training_algo = perceptron_online
-        maxIters = [10000, 20000, 30000]
+        maxIters = [10000, 20000, 30000, 50000, 100000, 200000, 500000]
 
         perceptrons_trained = []
         erreurs = []
@@ -1761,16 +1487,28 @@ if __name__=="__main__":
             erreurs.append(err)
             n()
         
-        display_and_save_matrix_table(perceptrons_trained, "Q. 5 - Poids perceptrons sur l'ensemble entier.png", "Q. 5 - Poids perceptrons sur l'ensemble entier", "Poid", "Perceptron test case")
+        display_and_save_matrix_table(perceptrons_trained, "Q5\Q. 5 - Poids perceptrons sur l'ensemble entier.png", "Q. 5 - Poids perceptrons sur l'ensemble entier", "Poid", "Perceptron test case")
 
+        stabilites_matrix = []  # 208 exemples × 3 perceptrons
+        
         #Evaluation des stabilité (Par perceptron, sur chaque patron)
-        stabilites_matrix = []
-        for i, perceptron in enumerate(perceptrons_trained):
+        for i in range(len(perceptrons_trained)):
+            perceptron = perceptrons_trained[i]
+            
             stabilites_paires = stabilites(complete_df_prepare, perceptron)
-            stabilites_matrix.append(paire[1])
-
-        display_and_save_matrix_table(stabilites_matrix, "Stabilites des perceptrons entrainés sur l'ensemble complet.png", 
-                                      "Stabilites des perceptrons entrainés sur l'ensemble complet", "Patron", "Stabilité perceptron")
+            print(f"    {len(stabilites_paires)} stabilités calculées")
+            
+            if i == 0:
+                # Initialiser la matrice train (104 × 8)
+                for paire in stabilites_paires:
+                    stabilites_matrix.append([paire[1]])  # Ligne avec 1 valeur
+            else:
+                # Ajouter aux lignes existantes
+                for idx, paire in enumerate(stabilites_paires):
+                    stabilites_matrix[idx].append(paire[1])
+        
+        display_and_save_matrix_table(stabilites_matrix, "Q5\Q5_Stabilites des perceptrons entrainés sur l'ensemble complet.png", 
+                                      "Stabilites des perceptrons entrainés sur l'ensemble complet", "Perceptron", "Patron")
 
         for i, err in enumerate(erreurs):
             print(f'Iterations {maxIters[i]} : Erreur = {err}/{len(complete_df_prepare)} = {err/len(complete_df_prepare)*100:.2f}%')        
@@ -1814,17 +1552,30 @@ if __name__=="__main__":
         #Plot de l'évolution des erreurs de la dernière expérience
         train_errors_ES = result[5]
         val_errors_ES = result[6]
-
-        display_and_save_matrix_table(perceptrons_trained, "Q. 6 - Poids perceptrons pour early stopping.png", "Q. 6 - Poids perceptrons pour early stopping", "Poid", "Perceptron test case")
+        complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
+    
+        display_and_save_matrix_table(perceptrons_trained, "Q6\Q. 6 - Poids perceptrons pour early stopping.png", "Q. 6 - Poids perceptrons pour early stopping", "Poid", "Perceptron test case")
         
         #Evaluation des stabilité (Par perceptron, sur chaque patron)
         stabilites_matrix = []
-        for i, perceptron in enumerate(perceptrons_trained):
+        
+        for i in range(len(perceptrons_trained)):
+            perceptron = perceptrons_trained[i]
+            
             stabilites_paires = stabilites(complete_df_prepare, perceptron)
-            stabilites_matrix.append(paire[1])
+            print(f"    {len(stabilites_paires)} stabilités calculées")
+            
+            if i == 0:
+                # Initialiser la matrice train (104 × 8)
+                for paire in stabilites_paires:
+                    stabilites_matrix.append([paire[1]])  # Ligne avec 1 valeur
+            else:
+                # Ajouter aux lignes existantes
+                for idx, paire in enumerate(stabilites_paires):
+                    stabilites_matrix[idx].append(paire[1])
 
-        display_and_save_matrix_table(stabilites_matrix, "Q. 6 - Stabilites des perceptrons entrainés avec Early Stopping.png", 
-                                      "Q. 6 - Stabilites des perceptrons entrainés avec Early Stopping", "Patron", "Stabilité perceptron")
+        display_and_save_matrix_table(stabilites_matrix, "Q6\Q. 6 - Stabilites des perceptrons entrainés avec Early Stopping.png", 
+                                      "Q. 6 - Stabilites des perceptrons entrainés avec Early Stopping", "Stabilité perceptron", "Patron")
 
 
         # Statistiques
@@ -1850,11 +1601,11 @@ if __name__=="__main__":
         plt.plot(val_errors_ES, label='Erreur de validation (LV)', marker='s', markersize=3)
         plt.xlabel('Itérations')
         plt.ylabel('Erreur')
-        plt.title('Early Stopping - Évolution des erreurs')
+        plt.title("Early Stopping - Évolution en fonction des itérations des erreurs d'entraînement et de validation")
         plt.legend()
         plt.grid(True)
-        plt.show()
-                    
+        plt.savefig("Q6/Q6_Comparaison_err_entraînement_et_validation", bbox_inches='tight', dpi=300)            
+        
         early_stopping_column_map = {
             # Clé dans results_early_stopping : Nom d'affichage dans le tableau
             'Ea':           'Erreur d\'Apprentissage (Ea)',
@@ -1864,7 +1615,7 @@ if __name__=="__main__":
         }
         display_and_save_results_table(results_early_stopping, 
                                        early_stopping_column_map,
-                                       filename='results_early_stopping_summary.png',
+                                       filename='Q6\Q6_results_early_stopping_summary.png',
                                        title='Résumé des résultats des test avec Early Stopping')
     
 
