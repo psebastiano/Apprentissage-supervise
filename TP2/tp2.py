@@ -3,15 +3,120 @@ import numpy as np
 from random import uniform as rd
 from typing import List, Dict, Any, Union
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from matplotlib.patches import Patch
-
-from mpl_toolkits.mplot3d import Axes3D
+import os
 import copy
 import dataframe_image as dfi
 
-
 def display_and_save_matrix_table(
+    data_matrix: Union[List[List[float]], np.ndarray], 
+    filename: str = "matrix_table.png", 
+    title: str = "Tableau des données",
+    index_name: str = "Numéro du Poids",
+    col_name: str = "Col",  # Changement du nom par défaut pour la nouvelle structure
+    batch_size: int = 100  # Nombre de lignes par batch
+):
+    # 1. Création du DataFrame
+    # Note : Si 'data_matrix' est une seule liste (vecteur 1D), Pandas le traite comme une colonne.
+    # On assure qu'il est bien un tableau 2D pour la transposition.
+    if not isinstance(data_matrix[0], list) and not isinstance(data_matrix[0], np.ndarray):
+        # Si c'est un vecteur 1D (comme une liste de 60 poids), on le met dans une liste de listes
+        data_matrix = [data_matrix]
+
+    df = pd.DataFrame(data_matrix)
+    
+    # 2. Transposition du DataFrame
+    # Les colonnes (Poids_0, Poids_1, etc.) deviennent les lignes.
+    # Les lignes (Essai/Ligne 0, 1, etc.) deviennent les colonnes.
+    df = df.T 
+    
+    # 3. Renommer les colonnes restantes (qui sont les anciens indices de ligne/essais)
+    # Ex: Poids du Perceptron 1, Poids du Perceptron 2, etc.
+    df.columns = [f'{col_name} {i}' for i in df.columns]
+
+    # 4. Ajout de l'index des poids comme colonne
+    df.index.name = index_name
+    df.reset_index(inplace=True)
+    
+    # 5. Calculer le nombre de batches nécessaires
+    total_rows = len(df)
+    num_batches = (total_rows + batch_size - 1) // batch_size  # Arrondi supérieur
+    
+    print(f"\n{'='*80}")
+    print(f"{title}")
+    print(f"{'='*80}")
+    print(f"Nombre total de lignes : {total_rows}")
+    print(f"Taille du batch : {batch_size}")
+    print(f"Nombre de batches nécessaires : {num_batches}\n")
+    
+    all_dfs = []  # Pour stocker tous les DataFrames générés
+    
+    # 6. Traiter chaque batch séparément
+    for batch_num in range(num_batches):
+        start_row = batch_num * batch_size
+        end_row = min((batch_num + 1) * batch_size, total_rows)
+        
+        # Créer un sous-DataFrame pour ce batch
+        batch_df = df.iloc[start_row:end_row].copy()
+        
+        # Réinitialiser l'index pour ce batch
+        batch_df.reset_index(drop=True, inplace=True)
+        
+        # Créer le titre du batch
+        if num_batches == 1:
+            batch_title = title
+        else:
+            batch_title = f"{title} (Batch {batch_num + 1}/{num_batches}) - Lignes {start_row + 1} à {end_row}"
+        
+        # 7. Application du style et du formatage pour ce batch
+        styled_batch_df = batch_df.style.set_caption(batch_title).format(
+            # Applique un formatage flottant à toutes les colonnes numériques
+            {col: '{:.6f}' for col in batch_df.columns if col != index_name}
+        ).set_properties(**{'text-align': 'center'})
+        
+        # 8. Affichage Console pour ce batch
+        print(f"\n{'='*80}")
+        print(f"BATCH {batch_num + 1}/{num_batches} - Lignes {start_row + 1} à {end_row}")
+        print(f"{'='*80}\n")
+        print(batch_df.to_string(index=False))
+        
+        # 9. Générer le nom de fichier pour ce batch
+        if num_batches == 1:
+            batch_filename = filename
+        else:
+            # Séparer l'extension et ajouter le suffixe batch
+            name_without_ext, ext = os.path.splitext(filename)
+            batch_filename = f"{name_without_ext}_batch_{batch_num + 1}{ext}"
+        
+        # 10. Sauvegarde en PNG pour ce batch
+        try:
+            # Utiliser max_rows=-1 et max_cols=-1 pour contourner la limitation
+            dfi.export(styled_batch_df, batch_filename, max_rows=-1, max_cols=-1) 
+            print(f"\n[OK] Batch {batch_num + 1} sauvegardé avec succès dans le fichier : **{batch_filename}**")
+            
+        except Exception as e:
+            print(f"\n[ERR] Erreur lors de l'exportation du batch {batch_num + 1} en PNG : {e}")
+        
+        all_dfs.append(batch_df)
+    
+    # 11. Résumé final
+    print(f"\n{'='*80}")
+    print("RÉSUMÉ DE L'EXPORTATION")
+    print(f"{'='*80}")
+    print(f"Total de lignes traitées : {total_rows}")
+    print(f"Taille du batch : {batch_size}")
+    print(f"Nombre de batches générés : {num_batches}")
+    
+    if num_batches > 1:
+        print(f"Fichiers générés :")
+        for batch_num in range(num_batches):
+            name_without_ext, ext = os.path.splitext(filename)
+            batch_filename = f"{name_without_ext}_batch_{batch_num + 1}{ext}"
+            print(f"  - {batch_filename}")
+    
+    # Retourner le DataFrame complet (non découpé) pour compatibilité
+    return df
+
+def display_and_save_matrix_table_old(
     data_matrix: Union[List[List[float]], np.ndarray], 
     filename: str = "matrix_table.png", 
     title: str = "Tableau des données",
@@ -55,10 +160,10 @@ def display_and_save_matrix_table(
     # 7. Sauvegarde en PNG (avec la correction max_cols=-1)
     try:
         dfi.export(styled_df, filename, max_cols=-1) 
-        print(f"\n✅ Tableau sauvegardé avec succès dans le fichier : **{filename}**")
+        print(f"\n[OK] Tableau sauvegardé avec succès dans le fichier : **{filename}**")
         
     except Exception as e:
-        print(f"\n❌ Erreur lors de l'exportation en PNG : {e}")
+        print(f"\n[ERR] Erreur lors de l'exportation en PNG : {e}")
 
     return df
 
@@ -104,13 +209,13 @@ def display_and_save_weights_table(
     try:
         import dataframe_image as dfi
         dfi.export(styled_df, filename) 
-        print(f"\n✅ Tableau sauvegardé avec succès dans le fichier : **{filename}**")
+        print(f"\n[OK] Tableau sauvegardé avec succès dans le fichier : **{filename}**")
         
     except ImportError:
-        print("\n⚠️ Erreur : La bibliothèque 'dataframe-image' n'est pas installée.")
+        print("\n[ERR] Erreur : La bibliothèque 'dataframe-image' n'est pas installée.")
         print("Veuillez l'installer avec : `pip install dataframe-image`")
     except Exception as e:
-        print(f"\n❌ Erreur lors de l'exportation en PNG : {e}")
+        print(f"\n[ERR] Erreur lors de l'exportation en PNG : {e}")
         print("Assurez-vous d'avoir un moteur de rendu (comme Chrome, Edge ou 'chromedriver') disponible.")
 
     return df
@@ -180,10 +285,10 @@ def display_and_save_results_table(
     # --- Sauvegarde en PNG ---
     try:
         dfi.export(styled_df, filename) 
-        print(f"\n✅ Tableau sauvegardé avec succès dans le fichier : **{filename}**")
+        print(f"\n[OK] Tableau sauvegardé avec succès dans le fichier : **{filename}**")
         
     except Exception as e:
-        print(f"\n❌ Erreur lors de l'exportation en PNG. Assurez-vous que 'dataframe-image' est installé.")
+        print(f"\n[ERR] Erreur lors de l'exportation en PNG. Assurez-vous que 'dataframe-image' est installé.")
         print(f"Détails de l'erreur : {e}")
 
     return df
@@ -509,7 +614,7 @@ def draw_curve_and_save(
     # 4. Sauvegarde du plot
     plt.savefig(filename, bbox_inches='tight', dpi=300)
     
-    print(f"✅ Courbe sauvegardée avec succès dans le fichier : **{filename}**")
+    print(f"[OK] Courbe sauvegardée avec succès dans le fichier : **{filename}**")
     
     # 5. Fermer la figure pour libérer la mémoire
     plt.close(fig)
@@ -1219,23 +1324,6 @@ def run_training_exo_1(data, training_algo, train, test, train_prepare, test_pre
         for paire in stabilites_paires:
             stabilites_list.append(paire[1])
         
-        xlabel="Exemple p"
-        ylabel="Stabilite p"
-        fig_stabilites, ax_stabilites = plt.subplots(figsize=(12, 10))
-        draw_scatter_plot(ax_stabilites, stabilites_list, 
-                        f"Stabilites des exemples d'apprentissage - {question_tag}", 
-                        color='red',
-                        xlabel=xlabel,
-                        ylabel=ylabel)
-        #Empty : True - f : False
-        ax_stabilites.legend()
-        fig_stabilites.savefig(f"Stabilites des exemples d'apprentissage - {question_tag}.png")
-        
-        if if_show:
-            plt.show()
-        else:
-            plt.close(fig_3d)  # Close 3D figure
-            plt.close(fig_stabilites)
 
         return (trained_perceptron,
                 training_error,
@@ -1348,6 +1436,19 @@ def question_6(train_df_prepare, test_df_prepare, eta, maxIter=10000):
 
 
 f = False
+t = True
+
+if_question_2_et_3 = f
+# if_question_2_et_3 = t
+
+# if_question_4 = f
+if_question_4 = t
+
+if_question_5 = f
+# if_question_5 = t
+
+if_question_6 = f
+# if_question_6 = t
 
 if __name__=="__main__":
 
@@ -1357,9 +1458,6 @@ if __name__=="__main__":
     #PRETRAITEMENT
     train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
 
-    #ENTRAINTEMENT
-    if_question_2_et_3 = True
-    # if_question_2_et_3 = f
     if if_question_2_et_3:
         #QUESTION 2 et 3
         #L'algorithme online converge en moins d'itération que l'algorithme batch
@@ -1376,7 +1474,7 @@ if __name__=="__main__":
         
         df_weights = display_and_save_weights_table(
             trained_perceptron,
-            filename="Q2_Poids_Perceptron.png",
+            filename="Q2_et_3/Q2_Poids_Perceptron.png",
             title="Q2 - Poids du Perceptron après Entraînement"
         )
 
@@ -1386,7 +1484,7 @@ if __name__=="__main__":
             stabilites_train, 
             label_text='Stabilité', 
             plot_title="Stabilité gamma sur Ensemble de entrainement", 
-            filename='Q2 - Stabilité sur ensemble de entrainement',
+            filename='Q2_et_3/Q2 - Stabilité sur ensemble de entrainement',
             color='blue', 
             xlabel='Patrons', 
             ylabel='Stabilité gamma sur Ensemble de entrainement', 
@@ -1404,7 +1502,7 @@ if __name__=="__main__":
             stabilites_test, 
             label_text='Stabilité', 
             plot_title="Stabilité gamma sur Ensemble de test", 
-            filename='Q2 - Stabilité sur ensemble de test',
+            filename='Q2_et_3/Q2 - Stabilité sur ensemble de test',
             color='blue', 
             xlabel='Patrons', 
             ylabel='Stabilité gamma sur Ensemble de test', 
@@ -1433,8 +1531,8 @@ if __name__=="__main__":
         draw_curve_and_save(
             stabilites_train, 
             label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble de entrainement", 
-            filename='Q3 - Stabilité sur ensemble de entrainement',
+            plot_title="Stabilité gamma sur Ensemble de entrainement (L_test)", 
+            filename='Q2_et_3/Q3 - Stabilité sur ensemble de entrainement',
             color='blue', 
             xlabel='Patrons', 
             ylabel='Stabilité gamma sur Ensemble de entrainement', 
@@ -1443,7 +1541,7 @@ if __name__=="__main__":
         )        
         
         stabilites_test = []
-        stabilites_paires = stabilites(test_df_prepare, trained_perceptron)
+        stabilites_paires = stabilites(train_df_prepare, trained_perceptron)
         
         for paire in stabilites_paires:
             stabilites_test.append(paire[1])
@@ -1451,8 +1549,8 @@ if __name__=="__main__":
         draw_curve_and_save(
             stabilites_test, 
             label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble de test", 
-            filename='Q3 - Stabilité sur ensemble de test',
+            plot_title="Stabilité gamma sur Ensemble de test (L_train)", 
+            filename='Q2_et_3/Q3 - Stabilité sur ensemble de test',
             color='blue', 
             xlabel='Patrons', 
             ylabel='Stabilité gamma sur Ensemble de test', 
@@ -1463,9 +1561,7 @@ if __name__=="__main__":
     # # ========================================================================
     # # PARTIE II: Algorithme Pocket
     # # ========================================================================
-    if_question_4 = True
 
-    # if_question_4 = f
     if if_question_4:
         print(f"\n{'='*80}")
         print("PARTIE II: ALGORITHME POCKET")
@@ -1550,32 +1646,103 @@ if __name__=="__main__":
             'Ens. Train': 'Ensemble d\'Entraînement', 
             'Ens. Test':  'Ensemble de Test'         
         }
-        display_and_save_results_table(results_pocket, pocket_column_map, filename='pocket_results_summary.png', title='Résumé des résultats de l\'algorithme Pocket')
+        display_and_save_results_table(results_pocket, 
+                                       pocket_column_map,
+                                       filename='Q4/pocket_results_summary.png',
+                                       title='Résumé des résultats de l\'algorithme Pocket')
         
-        display_and_save_matrix_table(perceptrons_trained, "Poids perceptrons entrainés Pocket.png", "Poids perceptrons entrainés Pocket", "Poid", "Perceptron test case")
+        display_and_save_matrix_table(perceptrons_trained,
+                                      "Q4/Poids perceptrons entrainés Pocket.png",
+                                      "Poids perceptrons entrainés Pocket",
+                                      "Poid",
+                                      "Perceptron test case")
     
-        #Evaluation des stabilité (Par perceptron, sur chaque patron)
-        stabilites_matrix = []
-        for i, perceptron in enumerate(perceptrons_trained):
-            if i < 8: 
-                stabilites_paires = stabilites(test_df_prepare, perceptron)
-            else: #Les deuxième 8 perceptrons ont été entrainés sur test
-                stabilites_paires = stabilites(train_df_prepare, perceptron)
-            
-            for paire in stabilites_paires:
-                stabilites_matrix.append(paire[1])
+        #Evaluation des stabilité de généralisation sur les 104 exemple
+        #de l'ensemble de généralisation :
 
-        display_and_save_matrix_table(stabilites_matrix, "Stabilites des 16 perceptrons entrainés avc Pocket.png", 
-                                      "Stabilites des 16 perceptrons entrainés avc Pocket", "Patron", "Stabilité perceptron")
-    
+       # Matrice 1: Stabilités de généralisation sur l'ensemble de test (perceptrons 0-7)
+        stabilites_generalisation_sur_test_matrix = []  # 104 exemples × 8 perceptrons
+
+        # Matrice 2: Stabilités de généralisation sur l'ensemble de train (perceptrons 8-15)  
+        stabilites_generalisation_sur_train_matrix = []  # 104 exemples × 8 perceptrons
+
+        print("Construction des matrices de stabilités de généralisation...")
+
+        # Pour les 8 premiers perceptrons (entraînés sur train, testés sur test)
+        print(f"\n1. Perceptrons 1-8 (entraînés sur train, testés sur test)")
+        for i in range(8):
+            perceptron = perceptrons_trained[i]
+            print(f"  Perceptron {i+1}/8...")
+            
+            stabilites_paires = stabilites(test_df_prepare, perceptron)
+            print(f"    {len(stabilites_paires)} stabilités calculées")
+            
+            if i == 0:
+                # Initialiser la matrice test (104 × 8)
+                for paire in stabilites_paires:
+                    stabilites_generalisation_sur_test_matrix.append([paire[1]])  # Ligne avec 1 valeur
+            else:
+                # Ajouter aux lignes existantes
+                for idx, paire in enumerate(stabilites_paires):
+                    stabilites_generalisation_sur_test_matrix[idx].append(paire[1])
+
+        # Pour les 8 derniers perceptrons (entraînés sur test, testés sur train)
+        print(f"\n2. Perceptrons 9-16 (entraînés sur test, testés sur train)")
+        for i in range(8, 16):
+            perceptron = perceptrons_trained[i]
+            print(f"  Perceptron {i+1}/16...")
+            
+            stabilites_paires = stabilites(train_df_prepare, perceptron)
+            print(f"    {len(stabilites_paires)} stabilités calculées")
+            
+            if i == 8:
+                # Initialiser la matrice train (104 × 8)
+                for paire in stabilites_paires:
+                    stabilites_generalisation_sur_train_matrix.append([paire[1]])  # Ligne avec 1 valeur
+            else:
+                # Ajouter aux lignes existantes
+                for idx, paire in enumerate(stabilites_paires):
+                    stabilites_generalisation_sur_train_matrix[idx].append(paire[1])
+
+        # Vérifications
+        print(f"\n{'='*50}")
+        print("RÉSUMÉ DES MATRICES DE STABILITÉS DE GÉNÉRALISATION")
+        print(f"{'='*50}")
+        print(f"Matrice sur TEST (perceptrons 1-8 sur exemples test):")
+        print(f"  - Dimensions: {len(stabilites_generalisation_sur_test_matrix)} × {len(stabilites_generalisation_sur_test_matrix[0]) if stabilites_generalisation_sur_test_matrix else 0}")
+        print(f"  - Attendue: 104 × 8")
+
+        print(f"\nMatrice sur TRAIN (perceptrons 9-16 sur exemples train):")
+        print(f"  - Dimensions: {len(stabilites_generalisation_sur_train_matrix)} × {len(stabilites_generalisation_sur_train_matrix[0]) if stabilites_generalisation_sur_train_matrix else 0}")
+        print(f"  - Attendue: 104 × 8")
+
+        # Afficher les matrices
+        if stabilites_generalisation_sur_test_matrix:
+            display_and_save_matrix_table(
+                stabilites_generalisation_sur_test_matrix, 
+                "Q4/Stabilites_generalisation_des_8_perceptrons_entraines_sur_train_testes_sur_test.png", 
+                "Stabilités de généralisation des 8 perceptrons (entraînés sur train, testés sur test)",
+                "Perceptron",  # Maintenant ce sera les lignes (après transposition)
+                "Patron",      # Maintenant ce sera les colonnes (après transposition)
+                batch_size=50  # Vous pouvez ajuster si nécessaire
+            )
+
+        if stabilites_generalisation_sur_train_matrix:
+            display_and_save_matrix_table(
+                stabilites_generalisation_sur_train_matrix, 
+                "Q4/Stabilites_generalisation_des_8_perceptrons_entraines_sur_test_testes_sur_train.png", 
+                "Stabilités de généralisation des 8 perceptrons (entraînés sur test, testés sur train)",
+                "Perceptron",  # Maintenant ce sera les lignes (après transposition)
+                "Patron",      # Maintenant ce sera les colonnes (après transposition)
+                batch_size=50
+    )
             
     # ========================================================================
     # PARTIE III: Test si L (train+test) est linéairement séparable
     # ========================================================================
 
     # Question 5
-    if_question_5 = True
-    # if_question_5 = f
+
     if if_question_5:
         question_tag_exo_5 = 'EXERCICE 5'
         
@@ -1594,7 +1761,7 @@ if __name__=="__main__":
             erreurs.append(err)
             n()
         
-        display_and_save_matrix_table(perceptrons_trained, "Q. 5 - Poids perceptrons sur l'ensemble entier", "Q. 5 - Poids perceptrons sur l'ensemble entier", "Poid", "Perceptron test case")
+        display_and_save_matrix_table(perceptrons_trained, "Q. 5 - Poids perceptrons sur l'ensemble entier.png", "Q. 5 - Poids perceptrons sur l'ensemble entier", "Poid", "Perceptron test case")
 
         #Evaluation des stabilité (Par perceptron, sur chaque patron)
         stabilites_matrix = []
@@ -1617,7 +1784,7 @@ if __name__=="__main__":
     # # ========================================================================
     # # PARTIE IV: Early Stopping
     # # ========================================================================
-    if_question_6 = True
+
     if if_question_6:
         print(f"\n{'='*80}")
         print("PARTIE IV: EARLY STOPPING")
@@ -1648,7 +1815,7 @@ if __name__=="__main__":
         train_errors_ES = result[5]
         val_errors_ES = result[6]
 
-        display_and_save_matrix_table(perceptrons_trained, "Q. 6 - Poids perceptrons pour early stopping", "Q. 6 - Poids perceptrons pour early stopping", "Poid", "Perceptron test case")
+        display_and_save_matrix_table(perceptrons_trained, "Q. 6 - Poids perceptrons pour early stopping.png", "Q. 6 - Poids perceptrons pour early stopping", "Poid", "Perceptron test case")
         
         #Evaluation des stabilité (Par perceptron, sur chaque patron)
         stabilites_matrix = []
