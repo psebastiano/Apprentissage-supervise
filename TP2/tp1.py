@@ -50,41 +50,41 @@ def signe(x):
 
 
 def f_OU(x):
-  n = len(x)
-  f_x = -1
+    n = len(x)
+    f_x = -1
 
-  for i in range(n):
-    if x[i] == 1:
-      f_x = 1
-      return f_x
-    else:
-      pass
-  return f_x
+    for i in range(n):
+      if x[i] == 1:
+        f_x = 1
+        return f_x
+      else:
+        pass
+    return f_x
 
 
 def f_AND(x):
-  n = len(x)
+    n = len(x)
 
-  f_x = 1
-  for i in range(n):
-    if x[i] == 0:
-      f_x = -1
-      return f_x
-    else:
-      pass
-  return f_x
+    f_x = 1
+    for i in range(n):
+      if x[i] == 0:
+        f_x = -1
+        return f_x
+      else:
+        pass
+    return f_x
 
 def f_XOR(x):
-    result = 0
-    for bit in x:
-        result ^= int(bit)  # XOR bit à bit
-    return 1 if result == 1 else -1
+      result = 0
+      for bit in x:
+          result ^= int(bit)  # XOR bit à bit
+      return 1 if result == 1 else -1
 
 def L (f, X_ens):
-  L_ens = []
-  for n in range(len(X_ens)):
-    L_ens.append([X_ens[n],f(X_ens[n][1:])]) #Le biais (x_0 = 1) est exclus du calcul de la fonction booleenne
-  return L_ens
+    L_ens = []
+    for n in range(len(X_ens)):
+      L_ens.append([X_ens[n],f(X_ens[n][1:])]) #Le biais (x_0 = 1) est exclus du calcul de la fonction booleenne
+    return L_ens
 
 N = 2
 X_ens = X(2, N)
@@ -135,6 +135,7 @@ def plot_L_et_w_bias_first(L_ens, w_k):
     w_k: [w0, w1, w2] où w0 est le biais
     """
     # Extraire les points (sauter le 1 du biais)
+    print("L_ens:", L_ens)
     x1_vals = [x[1] for x, t in L_ens]
     x2_vals = [x[2] for x, t in L_ens]
     labels = [t for x, t in L_ens]

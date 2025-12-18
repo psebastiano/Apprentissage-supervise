@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import os
 import copy
 import dataframe_image as dfi
+from itertools import product
+from perceptron_visualizer import PerceptronVisualizer
+
+seed = 42
 
 def display_and_save_matrix_table(
     data_matrix: Union[List[List[float]], np.ndarray], 
@@ -297,7 +301,7 @@ def show(if_show=True):
     if if_show:
         plt.show()
 
-def n():
+def nl():
     print('-'*50, '\n')
 
 def signe(x):
@@ -305,6 +309,198 @@ def signe(x):
         return 1
     else:
         return -1
+
+def compute_center(X):
+    # Extract only coordinates (ignore bias at index 0)
+    coords = np.array([p[1:] for p in X])
+    center = np.mean(coords, axis=0)
+    return center
+
+def expand_universe_from_corner(X, factor=2.0):
+    # 1. Extract only the coordinates (skipping the bias/label at index 0)
+    coords_only = np.array([p[1:] for p in X])
+    
+    # 2. Find the "Bottom-Left" reference point
+    # We find the minimum value for each dimension independently
+    bottom_left = np.min(coords_only, axis=0)
+    
+    expanded_points = []
+
+    for p in X:
+        biais = p[0]
+        coords = np.array(p[1:])
+
+        # 3. Calculate distance from the bottom-left corner
+        vector_from_corner = coords - bottom_left
+        
+        # 4. Expand ONLY along the first dimension (x-axis)
+        # Multiplying the distance from the leftmost point by the factor
+        vector_from_corner[0] = vector_from_corner[0] * factor
+        
+        # 5. Reconstruct the point relative to the corner
+        new_pos = bottom_left + vector_from_corner
+        expanded_points.append([biais] + new_pos.tolist())
+
+    return expanded_points
+
+def expand_universe_linear(X, factor=2.0):
+    # We assume the 'coords' start from index 1 onwards
+    # Extract only the coordinate parts to find the center
+    coords_only = np.array([p[1:] for p in X])
+    center = np.mean(coords_only, axis=0)
+    
+    expanded_points = []
+
+    for p in X:
+        biais = p[0]
+        coords = np.array(p[1:])
+
+        # Calculate the distance from center for all dimensions
+        vector_from_center = coords - center
+        
+        # Only scale the FIRST dimension (index 0 of the coordinate part)
+        # We keep the other dimensions (y, z, etc.) exactly as they were
+        vector_from_center[0] = vector_from_center[0] * factor
+        
+        # Reconstruct the point
+        new_pos = center + vector_from_center
+        expanded_points.append([biais] + new_pos.tolist())
+
+    return expanded_points
+
+def expand_universe(X, factor=2.0):
+    center = compute_center(X)
+    expanded_points = []
+
+    for p in X:
+        biais = p[0]
+        coords = np.array(p[1:])
+
+        vector_from_center = coords - center
+
+        new_pos = center + (factor * vector_from_center)
+        expanded_points.append([biais] + new_pos.tolist())
+
+    return expanded_points
+
+def contract_universe(X, factor=2):
+    return expand_universe(X, factor=1/factor)
+
+def create_points(nbPoints, N, bornes=(-10e6,10e6), seed=seed): #Ajout de 1.0 au début pour le biais
+
+    rng = np.random.default_rng(seed)
+    
+    points = []
+    borne_min, borne_max = bornes
+
+    for p in range(nbPoints):
+        point = []
+        point.append(1.0) #Le biais
+
+        for i in range(N):
+            x_i = rng.uniform(borne_min, borne_max)
+            point.append(x_i)
+        
+        points.append(point)
+
+    return points
+
+def init_perceptron_prof(N, biais_range=(-10e6, 10e6), seed=42):
+  rng = np.random.default_rng(seed)
+
+  w_prof = np.zeros(N+1)
+
+  biais_min, biais_max = biais_range
+  w_prof[0] = rng.uniform(biais_min, biais_max)
+  for i in range(1,len(w_prof)):
+      w_prof[i] = rng.uniform(biais_min, biais_max)
+  return w_prof
+
+def init_perceptron_prof_in_bounds(X, seed=42):
+    rng = np.random.default_rng(seed)
+    
+    # 1. Convert X to array and strip the first column (assuming it's bias/label)
+    # We want the actual spatial boundaries of the data
+    coords = np.array([p[1:] for p in X])
+    num_dim = coords.shape[1]  # N
+    
+    # 2. Calculate spatial boundaries
+    mins = np.min(coords, axis=0)
+    maxs = np.max(coords, axis=0)
+    
+    # 3. Create a random point P that is GUARANTEED to be inside the box
+    point_on_boundary = rng.uniform(mins, maxs)
+    
+    # 4. Generate random spatial weights (the direction the teacher faces)
+    # We use a smaller range (-1 to 1) because the bias will balance the scale
+    w_spatial = rng.uniform(-1, 1, size=num_dim)
+    
+    # 5. Calculate the Bias (w_prof[0])
+    # w0 + dot(w_spatial, point_on_boundary) = 0  =>  w0 = -dot(...)
+    bias = -np.dot(w_spatial, point_on_boundary)
+    
+    # 6. Construct final vector: [bias, w1, w2, ..., wN]
+    w_prof = np.zeros(num_dim + 1)
+    w_prof[0] = bias
+    w_prof[1:] = w_spatial
+    
+    return w_prof
+
+def L_prof(X, w_prof):
+  L_ens = []
+  for x in X:
+    L_ens.append([x,signe(np.dot(x, w_prof))])
+  return L_ens
+
+def X(n=2, d=2):
+    """
+    Génère toutes les combinaisons de `d` indices allant de 0 à n-1,
+    sous forme de floats.
+    """
+    return [ [float(x) for x in t] for t in product(range(n), repeat=d) ]
+
+def L (f, X_ens):
+    L_ens = []
+    for n in range(len(X_ens)):
+      L_ens.append([X_ens[n],f(X_ens[n][1:])]) #Le biais (x_0 = 1) est exclus du calcul de la fonction booleenne
+    return L_ens
+
+def f_OU(x):
+    n = len(x)
+    f_x = -1
+
+    for i in range(n):
+      if x[i] == 1:
+        f_x = 1
+        return f_x
+      else:
+        pass
+    return f_x
+
+
+def f_AND(x):
+    n = len(x)
+
+    f_x = 1
+    for i in range(n):
+      if x[i] == 0:
+        f_x = -1
+        return f_x
+      else:
+        pass
+    return f_x
+
+def f_XOR(x):
+      result = 0
+      for bit in x:
+          result ^= int(bit)  # XOR bit à bit
+      return 1 if result == 1 else -1
+
+def L (f, X_ens):
+    L_ens = []
+    for n in range(len(X_ens)):
+      L_ens.append([X_ens[n],f(X_ens[n][1:])]) #Le biais (x_0 = 1) est exclus du calcul de la fonction booleenne
+    return L_ens
 
 def error (L, w):
     """Calcule l'erreur d'apprentissage du perceptron sur l'ensemble d'entraînement
@@ -365,12 +561,13 @@ def f_init_Hebb(L_ens, biais_range):
     
     # Règle de Hebb pour les poids
     for k in range(p):
+        w[0] = w[0] + (1.0 * L_ens[k][1])  # Mise à jour du biais
         for i in range(1, dim):
             w[i] = w[i] + L_ens[k][0][i] * L_ens[k][1]
 
     return w
 
-def f_init_rand(L_ens, biais_range):
+def f_init_rand(L_ens, biais_range, seed=seed):
     if isinstance(L_ens, pd.DataFrame):
         print("[Avertissement] Conversion du DataFrame en Liste pour la fonction d'initialisation.")
         
@@ -379,21 +576,23 @@ def f_init_rand(L_ens, biais_range):
         for index, row in L_ens.iterrows():
             L_ens_converted.append([row['Donnee'], row['Classe voulue']])
         L_ens = L_ens_converted
-        
+    
+    rng = np.random.default_rng(seed)
+
     p = len(L_ens)
     dim = len(L_ens[0][0]) #This dimension assumes features have already been biaised 
 
-    borne_inf = biais_range[0]
-    borne_sup = biais_range[1]
+    borne_min = biais_range[0]
+    borne_max = biais_range[1]
 
     w = []
     for i in range(dim):
         w.append(0.0)
 
-    biais = (rd(borne_inf,borne_sup))
+    biais = (rng.uniform(borne_min, borne_max))
     w[0] = biais #Ajout du biais
     for i in range(1,dim):
-        w[i] = (rd(borne_inf,borne_sup))
+        w[i] = (rng.uniform(borne_min, borne_max))
 
     return w
 
@@ -632,6 +831,165 @@ def draw_scatter_plot(ax, data_list, label_text, color='black',
     # Optionnel : Ajout d'une grille pour la lisibilité
     ax.grid(True, linestyle='--', alpha=0.6)
 
+def plot_L_et_w_bias_first(L_ens, w_k):
+    """
+    L_ens: liste de tuples (x, t) où x = [1, x1, x2] (biais en premier)
+    w_k: [w0, w1, w2] où w0 est le biais
+    """
+
+    print("CKPOINT 1")
+    n()
+    print("L_ens:", L_ens)
+    n()
+    print("CKPOINT 1")
+    # Extraire les points (supporte x = [1,x1,x2] ou x = [x1,x2])
+    x1_vals = []
+    x2_vals = []
+    labels = []
+    for x, t in L_ens:
+        labels.append(t)
+        lx = len(x)
+        if lx >= 3:
+            x1_vals.append(x[1])
+            x2_vals.append(x[2])
+        elif lx == 2:
+            x1_vals.append(x[0])
+            x2_vals.append(x[1])
+        else:
+            raise ValueError(f"Unexpected feature vector length: {lx} for x={x}")
+
+    # Créer le plot
+    plt.figure(figsize=(8, 6))
+
+    # Tracer les points
+    colors = ['red' if t == -1 else 'blue' for t in labels]
+    plt.scatter(x1_vals, x2_vals, c=colors, s=100, alpha=0.7,
+                label=f'Classe -1 (rouge) / +1 (bleu)')
+
+    # Tracer la droite de décision
+    if len(w_k) < 3:
+        raise ValueError(f"Perceptron weight vector must have length >=3, got {len(w_k)}: {w_k}")
+    w0, w1, w2 = w_k[0], w_k[1], w_k[2]
+
+    # Générer des points pour la droite
+    x1_min, x1_max = min(x1_vals), max(x1_vals)
+
+    if abs(w2) > 1e-10:  # w2 ≠ 0
+        # w1*x1 + w2*x2 + w0 = 0 → x2 = -(w1*x1 + w0)/w2
+        x1_line = np.array([x1_min - 1, x1_max + 1])
+        x2_line = -(w1 * x1_line + w0) / w2
+    else:  # droite verticale
+        x_fixed = -w0 / w1
+        x2_min, x2_max = min(x2_vals), max(x2_vals)
+        x1_line = np.array([x_fixed, x_fixed])
+        x2_line = np.array([x2_min - 1, x2_max + 1])
+
+    plt.plot(x1_line, x2_line, 'k-', linewidth=3, label=f'{w1:.2f}·x1 + {w2:.2f}·x2 + {w0:.2f} = 0')
+
+    # Ajouter des indications
+    plt.xlabel('x1')
+    plt.ylabel('x2')
+    plt.title('Perceptron - Frontière de décision')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.axis('equal')
+
+    # Afficher les poids
+    print(f"Équation de la droite: {w1:.3f}·x1 + {w2:.3f}·x2 + {w0:.3f} = 0")
+    print(f"Vecteur normal (orthogonal à la droite): ({w1:.3f}, {w2:.3f})")
+    print(f"Vecteur directeur (le long de la droite): ({-w2:.3f}, {w1:.3f})")
+
+    plt.show()
+    return w0, w1, w2
+
+def plot_L_et_w_multiple_fixed_axes(L_ens, W_array, xlim=None, ylim=None):
+    """
+    Version avec limites x et y séparées.
+
+    xlim: tuple (x_min, x_max) ou None
+    ylim: tuple (y_min, y_max) ou None
+    """
+
+    # Extraire points (supporte x = [1,x1,x2] ou x = [x1,x2])
+    x1_vals = []
+    x2_vals = []
+    labels = []
+    for x, t in L_ens:
+        labels.append(t)
+        lx = len(x)
+        if lx >= 3:
+            x1_vals.append(x[1])
+            x2_vals.append(x[2])
+        elif lx == 2:
+            x1_vals.append(x[0])
+            x2_vals.append(x[1])
+        else:
+            raise ValueError(f"Unexpected feature vector length: {lx} for x={x}")
+
+    # Graphique
+    plt.figure(figsize=(10, 8))
+
+    # Points
+    colors = ['red' if t == -1 else 'blue' for t in labels]
+    plt.scatter(x1_vals, x2_vals, c=colors, s=100, alpha=0.7,
+                label='Classe -1 (rouge) / +1 (bleu)')
+
+    # Limites automatiques si non spécifiées
+    if xlim is None:
+        x_min, x_max = min(x1_vals), max(x1_vals)
+        x_margin = (x_max - x_min) * 0.2
+        xlim = (x_min - x_margin, x_max + x_margin)
+
+    if ylim is None:
+        y_min, y_max = min(x2_vals), max(x2_vals)
+        y_margin = (y_max - y_min) * 0.2
+        ylim = (y_min - y_margin, y_max + y_margin)
+
+    # Étendue pour calculer les droites (plus grande que l'affichage)
+    x_line_range = np.array([xlim[0] - 10, xlim[1] + 10])
+
+    # Tracer chaque droite
+    num_vectors = len(W_array)
+    colors_vectors = plt.cm.rainbow(np.linspace(0, 1, max(2, num_vectors)))
+
+    for i, w in enumerate(W_array):
+        wa = np.asarray(w).ravel()
+        # Accept weight vectors with bias ([w0,w1,w2]) or without ([w1,w2])
+        if wa.size >= 3:
+            w0, w1, w2 = float(wa[0]), float(wa[1]), float(wa[2])
+        elif wa.size == 2:
+            w0 = 0.0
+            w1, w2 = float(wa[0]), float(wa[1])
+        else:
+            raise ValueError(f"Weight vector must have 2 or 3 elements, got {wa}")
+
+        if abs(w2) > 1e-10:
+            y_line = -(w1 * x_line_range + w0) / w2
+        else:
+            x_fixed = -w0 / w1
+            x_line_range = np.array([x_fixed, x_fixed])
+            y_line = np.array([ylim[0] - 10, ylim[1] + 10])
+
+        if i == 0:
+            plt.plot(x_line_range, y_line, 'r-', linewidth=3, label='Professeur')
+        else:
+            plt.plot(x_line_range, y_line, color=colors_vectors[i],
+                     linewidth=1.5, linestyle='--', label=f'Élève {i}')
+
+    # FORCER les limites
+    plt.xlim(xlim[0], xlim[1])
+    plt.ylim(ylim[0], ylim[1])
+
+    # Origine
+    plt.scatter([0], [0], color='green', s=100, marker='*', label='Origine')
+
+    plt.xlabel('x1')
+    plt.ylabel('x2')
+    plt.title(f'Perceptron - {num_vectors} vecteurs (axes fixés)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
 def pocket_algorithm(L_ens, w_init, eta, max_iter=1000, target_error=None):
     """Algorithme Pocket: garde le meilleur résultat du perceptron
     
@@ -723,47 +1081,6 @@ def stabilites(L, w):
         stabilites.append([X[i], stabilite(w, X[i], y[i])])# print('i : ', i)
 
     return stabilites
-
-def project_data_on_3D(data):
-    """Projection 3D avec PCA manuelle"""
-    X = np.array(data['Donnee'].tolist())
-    y = data['Classe voulue'].map({'M': 1, 'R': -1}).values
-
-    # On exclut la colonne de biais (1.0) pour la standardisation et la PCA
-    X_features = X[:, 1:]
-    
-    # Standardisation manuelle
-    X_scaled, mean, std = standardize_features(X_features)
-
-    # PCA manuelle
-    X_3d, components, explained_variance = pca_manual(X_scaled, n_components=3)
-
-    # Séparer les points selon les classes
-    X_mines = X_3d[y == 1]
-    X_rocks = X_3d[y == -1]
-    
-    # Setup de la figure et des axes 3D
-    fig = plt.figure(figsize=(12, 10))
-    ax = fig.add_subplot(111, projection='3d') 
-
-    # Plotter les mines
-    ax.scatter(X_mines[:, 0], X_mines[:, 1], X_mines[:, 2],
-               label='Mine (M)', marker='o', color='red', alpha=0.7, s=50)
-
-    # Plotter les roches
-    ax.scatter(X_rocks[:, 0], X_rocks[:, 1], X_rocks[:, 2],
-               label='Roche (R)', marker='x', color='blue', alpha=0.7, s=50)
-
-    # Mise à jour des labels
-    ax.set_xlabel(f'PC 1 ({explained_variance[0]*100:.2f}%)')
-    ax.set_ylabel(f'PC 2 ({explained_variance[1]*100:.2f}%)')
-    ax.set_zlabel(f'PC 3 ({explained_variance[2]*100:.2f}%)')
-    
-    ax.set_title('Projection 3D du Sonar Data (Mines vs Roches) via PCA')
-    ax.legend()
-    
-    plt.savefig('sonar_pca_3d.png')
-    plt.show()
 
 def parse_custom_file(path: str, n: int):
     # Lire tout le fichier
@@ -1016,7 +1333,9 @@ def pretraitement(test_df, train_df):
     test_df_prepare['Classe voulue'] = test_df_prepare['Classe voulue'].map(mapping_classes)
     
     return train_df_prepare,test_df_prepare
-    
+
+"""    
+Fonctions tp2 - A SUPPRIMER A TERMES
 def run_training_exo_1(data, training_algo, train, test, train_prepare, test_prepare, question_tag, if_show=True):
         biais_range = [-1, 1]
         perceptron = f_init_rand(train, biais_range)
@@ -1159,10 +1478,231 @@ def question_6(train_df_prepare, test_df_prepare, eta, maxIter=10000):
     print(f"Itérations: {n_iter_ES}")
 
     return Ea_ES, Ev_ES, Et_ES, n_iter_ES, w_best_ES, train_errors_ES, val_errors_ES
+"""
 
+def minim_error(L, w, maxIter, eta, temp, temp_variable=False):
+    """
+    Implements the Minimerror learning rule.
+    Minimizes the cost function Somme sur mu de V(mu) = [1 - tanh(beta * gamma / 2)] / 2
+    """
+    
+    # Convert to numpy arrays for safe numeric ops
+    X = [np.asarray(ex[0], dtype=float) for ex in L]
+    y = [float(ex[1]) for ex in L]
+
+    w = np.asarray(w, dtype=float)
+    beta = 1.0 / float(temp)
+    w_k = []
+    
+    w_k.append(copy.deepcopy(w))
+    for _ in range(int(maxIter)):
+        print("w avant mise à jour:", w)
+        for mu in range(len(X)):
+            gamma = stabilite(w, X[mu], y[mu])
+            arg = (beta * gamma) / 2.0
+
+            # derivative uses sech^2 = 1 - tanh^2(arg)
+            # sech2 = 1.0 - np.tanh(arg)**2
+
+            # gradient is scalar * X[mu]
+            grad_scalar = - (beta / 4.0) * 1/(np.cosh(arg)**2) * y[mu]
+            gradient_factor = grad_scalar * X[mu]
+
+            w = w - eta * gradient_factor
+        w = w / np.linalg.norm(w)
+        print("w après mise à jour:", w)
+        w_k.append(copy.deepcopy(w))
+    # print("Weights evolution during Minimerror training:")
+    # print(w_k)
+    return w_k
+
+def minim_error_temp_variable(L, w, maxIter, eta, temp):
+    X = [np.asarray(ex[0], dtype=float) for ex in L]
+    y = [float(ex[1]) for ex in L]
+    w = np.asarray(w, dtype=float)
+
+    w_history = []
+    temp_history = []
+    
+    # Store initial state
+    w_history.append(w.copy())
+    temp_history.append(temp)
+    
+    gamma_history = []
+    gamma_history.append(0)
+    gamme_one_iter = []
+    
+    t_k = temp
+    for iter in range(int(maxIter)):
+        beta_k = 1.0 / float(t_k)
+        print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
+        for mu in range(len(X)):
+            gamma = stabilite(w, X[mu], y[mu])
+            gamme_one_iter.append(gamma)
+            arg = (beta_k * gamma) / 2.0
+            if abs(arg) > 20:
+                grad_scalar = 0.0
+            else:
+                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
+            # grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
+            
+            w = w - eta * (grad_scalar * X[mu])
+
+        # Cooling schedule
+        if iter % 100 == 0 and iter > 0:
+            eta = eta * 0.95
+            
+        w = w / np.linalg.norm(w)
+        
+        # Record state AFTER the update
+        w_history.append(w.copy())
+        temp_history.append(t_k)
+        gamma_history.append(np.mean(gamme_one_iter))
+    
+    return w_history, temp_history, gamma_history
+
+def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
+    X = [np.asarray(ex[0], dtype=float) for ex in L]
+    y = [float(ex[1]) for ex in L]
+    w = np.asarray(w, dtype=float)
+
+    w_history = []
+    temp_history = []
+    gamma_history = []
+    
+    # Store initial state
+    w_history.append(w.copy())
+    temp_history.append(temp)
+    gamma_history.append(0)
+    
+    t_k = temp
+    
+    for iter in range(int(maxIter)):
+        beta_k = 1.0 / float(t_k)
+        print(f"Iteration {iter+1}/{int(maxIter)}, Temp: {t_k:.4f}")
+        
+        # 1. Pre-evaluate all gammas to find the dynamic range for this iteration
+        all_gammas = np.array([stabilite(w, X[mu], y[mu]) for mu in range(len(X))])
+        g_min, g_max = np.min(all_gammas), np.max(all_gammas)
+        
+        gamme_one_iter = []
+        
+        # 2. Online-style update using mapped gammas
+        for mu in range(len(X)):
+            raw_gamma = all_gammas[mu]
+            
+            # Linear mapping to [-1, 1]
+            if g_max != g_min:
+                gamma_mapped = abs(2.0 * (raw_gamma - g_min) / (g_max - g_min) - 1.0)
+            else:
+                gamma_mapped = 0.0 # Avoid division by zero if all gammas are identical
+            
+            gamme_one_iter.append(gamma_mapped)
+            
+            # Calculate argument using the mapped gamma
+            arg = (beta_k * gamma_mapped) / 2.0
+            
+            # Gradient calculation with safety check
+            if abs(arg) > 25:
+                grad_scalar = 0.0
+            else:
+                # Use np.cosh safely
+                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
+            
+            # Online update: update w immediately for each example
+            w = w - eta * (grad_scalar * X[mu])
+
+        # Cooling schedule
+        # if iter % 10 == 0 and iter > 0:
+        #     t_k = t_k * 0.95
+            
+        # Ensure w stays on the unit sphere
+        norm_w = np.linalg.norm(w)
+        if norm_w > 0:
+            w = w / norm_w
+        
+        # Record state
+        w_history.append(w.copy())
+        temp_history.append(t_k)
+        gamma_history.append(np.mean(gamme_one_iter))
+    
+    return w_history, temp_history, gamma_history
+
+def minim_error_temp_variable_batch(L, w, maxIter, eta, temp):
+    X = [np.asarray(ex[0], dtype=float) for ex in L]
+    y = [float(ex[1]) for ex in L]
+    w = np.asarray(w, dtype=float)
+
+    w_history = []
+    temp_history = []
+    
+    # Store initial state
+    w_history.append(w.copy())
+    temp_history.append(temp)
+    
+    gamma_history = []
+    gamma_history.append(0)
+    gamme_one_iter = []
+    
+    t_k = temp
+    for iter in range(int(maxIter)):
+        beta_k = 1.0 / float(t_k)
+        print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
+        arg_vect = []
+        for mu in range(len(X)):
+            gamma = stabilite(w, X[mu], y[mu])
+            gamme_one_iter.append(gamma)
+            print("gamma:", gamma)
+            arg = (beta_k * gamma) / 2.0
+            print("arg:", arg)
+            if abs(arg) > 20:
+                grad_scalar = 0.0
+            else:
+                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
+            arg_vect.append(grad_scalar)
+        arg_vect = np.array(arg_vect / np.linalg.norm(arg_vect))
+            # grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
+        gradient_sum = np.sum(arg_vect[:, np.newaxis] * X, axis=0)
+        w = w - eta * gradient_sum
+
+        # Cooling schedule
+        # if iter % 10 == 0 and iter > 0:
+        #     t_k = t_k * 0.95
+            
+        w = w / np.linalg.norm(w)
+        
+        # Record state AFTER the update
+        w_history.append(w.copy())
+        temp_history.append(t_k)
+        gamma_history.append(np.mean(gamme_one_iter))
+    
+    return w_history, temp_history, gamma_history
+
+def run_minim_error(L, w, algo, eta, maxIter):
+    # temp = [0.01, 0.1, 0.5, 1.0, 5.0, 10.0]
+    temp = [0.25] #T_k - La température magique de Keli 
+ 
+    perceptrons_trained = []
+
+    for t in temp:
+        w_trained = algo(L, w, maxIter, eta, t)
+        perceptrons_trained.append(w_trained)
+        # err = error(L, w_trained)
+        # print(f"Température: {t}, Erreur: {err}/{len(L)} = {err/len(L)*100:.2f}%")
+
+    return perceptrons_trained# #err
 
 f = False
 t = True
+
+# try_minim_error_ET = f
+# Use a separate flag name so we don't overwrite the function `try_minim_error_ET`
+run_try_minim_error_old = f
+
+run_try_minim_error_new = t
+
+if_import_data = f
+# if_import_data = t
 
 if_question_2_et_3 = f
 # if_question_2_et_3 = t
@@ -1170,19 +1710,104 @@ if_question_2_et_3 = f
 if_question_4 = f
 # if_question_4 = t
 
-# if_question_5 = f
-if_question_5 = t
+if_question_5 = f
+# if_question_5 = t
 
 if_question_6 = f
 # if_question_6 = t
 
 if __name__=="__main__":
 
-    #IMPORTATION DONNEES
-    data_df, test_df, train_df = import_data()
+    if if_import_data:
+        #IMPORTATION DONNEES
+        data_df, test_df, train_df = import_data()
 
-    #PRETRAITEMENT
-    train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
+        #PRETRAITEMENT
+        train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
+
+    if run_try_minim_error_old:
+        N = 2
+        X_ens = X(200, N)
+        X_ens = [[1.0] + x for x in X_ens] # Ajouter le biais
+        X_ens = np.array(X_ens)
+        print(X_ens)
+
+        L_OU = L(f_OU, X_ens)
+        L_AND = L(f_AND, X_ens)
+        L_XOR = L(f_XOR, X_ens)
+
+        print(L_OU)
+        print(L_AND)
+        print(L_XOR)
+        print("X:", X_ens)
+
+        # L_test = L_AND
+        L_test = L_XOR
+
+        w = np.array(f_init_rand(L_test, [-1, 1]))
+        
+        print("w:", w)
+        n()
+        maxIter = 2000
+        # maxIter = 2
+        eta = 0.1
+
+        # perceptrons_trained, err = try_minim_error_ET(L_test, w, algo=minim_error, eta=eta, maxIter=maxIter)
+        perceptrons_trained = run_minim_error(L_test, w, algo=minim_error, eta=eta, maxIter=maxIter)
+        
+        print(perceptrons_trained)
+        PerceptronVisualizer(L_test, perceptrons_trained[0])
+        # PerceptronVisualizer(L_test, perceptrons_trained[1])
+    
+    if run_try_minim_error_new:
+        
+        # for n in range(1,4):
+        #     print("n: " , n)
+        #     print("Points " , create_points(2, 2, [-1,1]))
+            
+        seed_1 = 45
+        seed_2 = 99
+
+        nbPoints = 2000
+        N = 2
+        bornes = [-20,20]
+        print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
+        X_ens = create_points(nbPoints, N, bornes, seed_1)
+        
+        facteur = 1
+        bornes_expanded = [bornes[0]*facteur, bornes[0]*facteur]
+        X_ens = expand_universe_from_corner(X_ens, facteur) 
+        print("X_ens:", X_ens)
+        
+        # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
+        w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
+        print("w_prof:", w_prof)
+
+        L_ens = L_prof(X_ens, w_prof)
+        print("L_ens:", L_ens)
+
+        # w = np.array(f_init_rand(L_ens, [-1, 1]))
+        w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
+        
+        print("Initial weights w:", w)
+        # print("w:", w)
+        nl()
+        maxIter = 300
+        # maxIter = 2
+        # eta = 0.0000075
+        eta = 0.001
+        print("len(X_ens):", len(X_ens))
+
+        temp=0.28
+        # Unpack the two lists directly
+        # weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=0.25)
+        # weights, temps, gammas = minim_error_temp_variable_dynamic_gammas(L_ens, w, maxIter=maxIter, eta=eta, temp=0.35)
+        weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=temp)
+
+        # The lists are now synchronized (both length maxIter + 1)
+        PerceptronVisualizer(L_ens, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"))
 
     if if_question_2_et_3:
         #QUESTION 2 et 3
