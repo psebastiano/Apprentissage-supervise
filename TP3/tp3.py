@@ -1531,10 +1531,27 @@ def minim_error(L, w, maxIter, eta, temp, temp_variable=False):
     # print(w_k)
     return w_k
 
-def minim_error_temp_variable(L, w, maxIter, eta, temp):
-    X = [np.asarray(ex[0], dtype=float) for ex in L]
-    y = [float(ex[1]) for ex in L]
+def minim_error_avec_recuit(L_ens, w, maxIter, eta, 
+                            temp, temp_target,
+                            grad_stop_pos, grad_stop_neg):
+    
+    if isinstance(L_ens, pd.DataFrame):
+        L_ens_converted = []
+        for index, row in L_ens.iterrows():
+            L_ens_converted.append([row['Donnee'], row['Classe voulue']])
+        L_ens = L_ens_converted
+
+    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
+    y = [float(ex[1]) for ex in L_ens]
     w = np.asarray(w, dtype=float)
+
+    print("In Minimerror")
+    # print("L_ens : ", L_ens)
+    # print("X : ", X)
+    # print("y : ", y)
+    # print("w : ", w)
+    
+
 
     w_history = []
     temp_history = []
@@ -1543,47 +1560,57 @@ def minim_error_temp_variable(L, w, maxIter, eta, temp):
     w_history.append(w.copy())
     temp_history.append(temp)
     
+    gamme_one_iter = []
     gamma_history = []
     gamma_history.append(0)
-    gamme_one_iter = []
     
-    target_t = 0.0001
-    decay_factor = (target_t / temp) ** (1.0/maxIter)
+    err = error(L_ens, w)
+    error_history = []
+    error_history.append(err)
 
-    windowReductionFactor = 10
-    max_iter_for_grad = int(maxIter/windowReductionFactor)
+    temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)
     t_k = temp
     
-    for iter in range(int(maxIter)):
+    iter = 1
+    while iter <= maxIter and err != 0:
+        err = error(L_ens, w)
         beta_k = 1.0 / float(t_k)
-        if iter % 100 == 0:
+        if iter % 25 == 0:
             print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
-            print("-5.0 / (t_k*10) = ", -5.0 / (t_k*10))
-
         for mu in range(len(X)):
             gamma = stabilite(w, X[mu], y[mu])
             gamme_one_iter.append(gamma)
             arg = (beta_k * gamma) / 2.0
-
-            if arg > 0:
+            if arg > grad_stop_pos:
+                # print("mu", mu)
+                # print("arg > ", grad_stop_pos, " - Skipped")
                 grad_scalar = 0.0
-            elif arg < -5.0 / (t_k*10):
+            elif arg < grad_stop_neg:
+                # print("mu", mu)
+                # print("arg < ", grad_stop_neg, " - Skipped")
                 grad_scalar = 0.0
             else:
                 grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-            
+                # print("mu", mu)
+                # print("grad_scalar : ", grad_scalar)
+
+
             w = w - eta * (grad_scalar * X[mu])
 
-        t_k = t_k * decay_factor
-            
-        w = w / np.linalg.norm(w)
-        
+        t_k = t_k * temp_decay_factor  
+        # w = w / np.linalg.norm(w)
+        iter += 1    
+
+
         # Record state AFTER the update
         w_history.append(w.copy())
         temp_history.append(t_k)
         gamma_history.append(np.mean(gamme_one_iter))
+        
+        err = error(L_ens, w)
+        error_history.append(err)
     
-    return w_history, temp_history, gamma_history
+    return w_history, temp_history, gamma_history, error_history
 
 def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
     X = [np.asarray(ex[0], dtype=float) for ex in L]
@@ -1723,10 +1750,14 @@ t = True
 # Use a separate flag name so we don't overwrite the function `try_minim_error_ET`
 run_try_minim_error_old = f
 
-run_try_minim_error_new = t
+# run_try_minim_error_new = t
+run_try_minim_error_new = f
 
-if_import_data = f
-# if_import_data = t
+# if_import_data = f
+if_import_data = t
+
+# if_question_1 = f
+if_question_1 = t
 
 if_question_2_et_3 = f
 # if_question_2_et_3 = t
@@ -1793,15 +1824,12 @@ if __name__=="__main__":
         seed_2 = 99
         seed_3 = 21
 
-        nbPoints = 2000
+        nbPoints = 200
         N = 2
         bornes = [-20,20]
         print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
         X_ens = create_points(nbPoints, N, bornes, seed_1)
-        
-        facteur = 1
-        bornes_expanded = [bornes[0]*facteur, bornes[0]*facteur]
-        X_ens = expand_universe_from_corner(X_ens, facteur) 
+
         # print("X_ens:", X_ens)
         
         # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
@@ -1814,37 +1842,144 @@ if __name__=="__main__":
         facter_bruit = 20
         inversedExemple = int(nbPoints/facter_bruit)
         print("inversedExemple :", inversedExemple)
-        L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
+        # L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
         
         # w = np.array(f_init_rand(L_ens, [-1, 1]))
         w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
-        w= w/np.linalg.norm(w)
+        w = w / np.linalg.norm(w)
         print("Initial weights w:", w)
         # print("w:", w)
         nl()
         maxIter = 1000
         # maxIter = 2
         # eta = 0.0000075
-        eta = 0.0001
+        eta = 0.001
         print("len(X_ens):", len(X_ens))
 
         temp=0.25
-        # Unpack the two lists directly
-        # weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=0.25)
-        # weights, temps, gammas = minim_error_temp_variable_dynamic_gammas(L_ens, w, maxIter=maxIter, eta=eta, temp=0.35)
-        weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=temp)
+        temp_target = 0.01
 
-        # The lists are now synchronized (both length maxIter + 1)
+        grad_stop_pos = 20
+        grad_stop_neg = -20
+
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_avec_recuit(L_ens, w, 
+                                                         maxIter=maxIter, eta=eta,
+                                                         temp=temp, temp_target=temp_target,
+                                                         grad_stop_pos=grad_stop_pos,
+                                                         grad_stop_neg=grad_stop_neg)
+        
         PerceptronVisualizer(L_ens, weights, 
                             (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"))
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error")
+                            )
 
         err = error(L_ens, weights[-1])
-        print("erreur d'apprentissage minimerror : ", err)
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
 
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
 
         err = error(L_ens, w_prof)
         print("erreur d'apprentissage teacher : ", err)
+    
+    if if_question_1:
+        print("-"*25, "QUESTION 1", "-"*25)
+        print("train_df_prepare")
+        print(train_df_prepare)
+        print("test_df_prepare")
+        print(test_df_prepare)
+        nl()
+
+        w = np.array(f_init_Hebb(train_df_prepare, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+
+        print("Initial weights w:", w)
+
+
+        nl()
+        maxIter = 4000
+        # maxIter = 2
+
+        # eta = 0.0000075
+        eta = 0.0001
+
+        temp=0.25
+        temp_target = 0.001
+
+        grad_stop_pos = 0
+        grad_stop_neg = -10
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_avec_recuit(train_df_prepare, w, 
+                                                         maxIter=maxIter, eta=eta,
+                                                         temp=temp, temp_target=temp_target,
+                                                         grad_stop_pos=grad_stop_pos,
+                                                         grad_stop_neg=grad_stop_neg)
+
+        weight_norms = [np.linalg.norm(w) for w in weights]
+
+        viz = PerceptronVisualizer(train_df_prepare, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error"),
+                            (weight_norms, "Weight Norm"),
+                            show_plot=False)
+        
+        viz.save_tracks_separately(prefix="Q1/sonar_results_step_1")
+
+        err = error(train_df_prepare, weights[-1])
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+        nl()
+        print("-"*25, "TEST SUR test_df_prepare", "-"*25)
+        E_g = error(test_df_prepare, weights[-1])
+
+        print("Erreur de généralisation :", E_g)
+
+
+        grad_stop_pos = 20
+        grad_stop_neg = 20
+        maxIter = 1000
+        temp = temp_target
+        temp_target = 0.0001
+        weights, temps, gammas, errors = minim_error_avec_recuit(train_df_prepare, weights[-1], 
+                                                         maxIter=maxIter, eta=eta,
+                                                         temp=temp, temp_target=temp_target,
+                                                         grad_stop_pos=grad_stop_pos,
+                                                         grad_stop_neg=grad_stop_neg)
+        
+        
+        
+        weight_norms = [np.linalg.norm(w) for w in weights]
+
+        viz = PerceptronVisualizer(train_df_prepare, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error"),
+                            (weight_norms, "Weight Norm"),
+                            show_plot=False)
+        
+        viz.save_tracks_separately(prefix="Q1/sonar_results_step_2")
+        print("-"*25, "APPRENTISSAGE SUR train_df_prepare", "-"*25)
+
+        err = error(train_df_prepare, weights[-1])
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+        nl()
+        print("-"*25, "TEST SUR test_df_prepare", "-"*25)
+        E_g = error(test_df_prepare, weights[-1])
+
+        print("Erreur de généralisation :", E_g)
 
     if if_question_2_et_3:
         #QUESTION 2 et 3
