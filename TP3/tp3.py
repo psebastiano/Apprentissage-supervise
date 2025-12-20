@@ -452,6 +452,21 @@ def L_prof(X, w_prof):
     L_ens.append([x,signe(np.dot(x, w_prof))])
   return L_ens
 
+def make_L_non_LS(L, inversedExemple, seed):
+    size_L = len(L)
+    rng = np.random.default_rng(seed)
+    
+    random_indices = rng.choice(size_L, size=inversedExemple, replace=False)
+
+    for idx in random_indices:
+        exemple = L[idx]
+        if exemple[1] == 1:
+            exemple[1] = -1
+        else:
+            exemple[1] = 1
+
+    return L
+
 def X(n=2, d=2):
     """
     Génère toutes les combinaisons de `d` indices allant de 0 à n-1,
@@ -1532,25 +1547,34 @@ def minim_error_temp_variable(L, w, maxIter, eta, temp):
     gamma_history.append(0)
     gamme_one_iter = []
     
+    target_t = 0.0001
+    decay_factor = (target_t / temp) ** (1.0/maxIter)
+
+    windowReductionFactor = 10
+    max_iter_for_grad = int(maxIter/windowReductionFactor)
     t_k = temp
+    
     for iter in range(int(maxIter)):
         beta_k = 1.0 / float(t_k)
-        print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
+        if iter % 100 == 0:
+            print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
+            print("-5.0 / (t_k*10) = ", -5.0 / (t_k*10))
+
         for mu in range(len(X)):
             gamma = stabilite(w, X[mu], y[mu])
             gamme_one_iter.append(gamma)
             arg = (beta_k * gamma) / 2.0
-            if abs(arg) > 20:
+
+            if arg > 0:
+                grad_scalar = 0.0
+            elif arg < -5.0 / (t_k*10):
                 grad_scalar = 0.0
             else:
                 grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-            # grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
             
             w = w - eta * (grad_scalar * X[mu])
 
-        # Cooling schedule
-        if iter % 100 == 0 and iter > 0:
-            eta = eta * 0.95
+        t_k = t_k * decay_factor
             
         w = w / np.linalg.norm(w)
         
@@ -1593,7 +1617,7 @@ def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
             
             # Linear mapping to [-1, 1]
             if g_max != g_min:
-                gamma_mapped = abs(2.0 * (raw_gamma - g_min) / (g_max - g_min) - 1.0)
+                gamma_mapped = 2.0 * (raw_gamma - g_min) / (g_max - g_min) - 1.0
             else:
                 gamma_mapped = 0.0 # Avoid division by zero if all gammas are identical
             
@@ -1767,6 +1791,7 @@ if __name__=="__main__":
             
         seed_1 = 45
         seed_2 = 99
+        seed_3 = 21
 
         nbPoints = 2000
         N = 2
@@ -1777,28 +1802,33 @@ if __name__=="__main__":
         facteur = 1
         bornes_expanded = [bornes[0]*facteur, bornes[0]*facteur]
         X_ens = expand_universe_from_corner(X_ens, facteur) 
-        print("X_ens:", X_ens)
+        # print("X_ens:", X_ens)
         
         # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
         w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
-        print("w_prof:", w_prof)
+        # print("w_prof:", w_prof)
 
         L_ens = L_prof(X_ens, w_prof)
-        print("L_ens:", L_ens)
+        # print("L_ens:", L_ens)
 
+        facter_bruit = 20
+        inversedExemple = int(nbPoints/facter_bruit)
+        print("inversedExemple :", inversedExemple)
+        L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
+        
         # w = np.array(f_init_rand(L_ens, [-1, 1]))
         w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
-        
+        w= w/np.linalg.norm(w)
         print("Initial weights w:", w)
         # print("w:", w)
         nl()
-        maxIter = 300
+        maxIter = 1000
         # maxIter = 2
         # eta = 0.0000075
-        eta = 0.001
+        eta = 0.0001
         print("len(X_ens):", len(X_ens))
 
-        temp=0.28
+        temp=0.25
         # Unpack the two lists directly
         # weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=0.25)
         # weights, temps, gammas = minim_error_temp_variable_dynamic_gammas(L_ens, w, maxIter=maxIter, eta=eta, temp=0.35)
@@ -1808,6 +1838,13 @@ if __name__=="__main__":
         PerceptronVisualizer(L_ens, weights, 
                             (temps, "Temperature"), 
                             (gammas, "Mean Gamma"))
+
+        err = error(L_ens, weights[-1])
+        print("erreur d'apprentissage minimerror : ", err)
+
+
+        err = error(L_ens, w_prof)
+        print("erreur d'apprentissage teacher : ", err)
 
     if if_question_2_et_3:
         #QUESTION 2 et 3
