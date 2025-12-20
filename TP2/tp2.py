@@ -709,7 +709,7 @@ def stabilites(L, w):
     
     for index, row in L.iterrows():
         L_converted.append([row['Donnee'], row['Classe voulue']])
-        L = L_converted
+    L = L_converted
 
     y = []
     X = []

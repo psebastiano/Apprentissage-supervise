@@ -368,6 +368,24 @@ def expand_universe_linear(X, factor=2.0):
 
     return expanded_points
 
+def expand_universe(X, factor=2.0):
+    center = compute_center(X)
+    expanded_points = []
+
+    for p in X:
+        biais = p[0]
+        coords = np.array(p[1:])
+
+        vector_from_center = coords - center
+
+        new_pos = center + (factor * vector_from_center)
+        expanded_points.append([biais] + new_pos.tolist())
+
+    return expanded_points
+
+def contract_universe(X, factor=2):
+    return expand_universe(X, factor=1/factor)
+
 def create_points(nbPoints, N, bornes=(-10e6,10e6), seed=seed): #Ajout de 1.0 au début pour le biais
 
     rng = np.random.default_rng(seed)
@@ -1057,14 +1075,13 @@ def stabilite(w, x, tau):
 
 def stabilites(L, w):
     """ Calcul de la distance des exemples à l'hyperplan séparateur """
-    
     if isinstance(L, pd.DataFrame):
         print("[Avertissement] Conversion du DataFrame en Liste pour la fonction d'initialisation.")
         # Le DataFrame est converti en une liste de [features, target]
         L_converted = []
     
-        for index, row in L.iterrows():
-            L_converted.append([row['Donnee'], row['Classe voulue']])
+    for index, row in L.iterrows():
+        L_converted.append([row['Donnee'], row['Classe voulue']])
         L = L_converted
 
     y = []
@@ -1078,7 +1095,6 @@ def stabilites(L, w):
     for i in range(len(X)):
         stabilites.append([X[i], stabilite(w, X[i], y[i])])# print('i : ', i)
 
-    
     return stabilites
 
 def parse_custom_file(path: str, n: int):
@@ -1479,30 +1495,6 @@ def question_6(train_df_prepare, test_df_prepare, eta, maxIter=10000):
     return Ea_ES, Ev_ES, Et_ES, n_iter_ES, w_best_ES, train_errors_ES, val_errors_ES
 """
 
-def expand_universe(L_ens, w, delta):
-    """
-    Pousse les points loin de l'hyperplan w par un facteur delta.
-    Chaque point x_mu devient x_mu + delta * y_mu * (w / ||w||)
-    """
-    # 1. Normaliser w pour avoir la direction pure (le vecteur unité)
-    w_norm = np.asarray(w) / np.linalg.norm(w)
-    
-    L_expanded = []
-    
-    # 2. Parcourir les exemples (on suit votre structure [Donnee, Classe voulue])
-    for exemple in L_ens:
-        x_mu = np.asarray(exemple[0], dtype=float)
-        y_mu = float(exemple[1])
-        
-        # Pousser le point : le signe de y_mu assure qu'il part du bon côté
-        # Si y=1, on va dans le sens de w. Si y=-1, on va à l'opposé.
-        x_pushed = x_mu + (delta * y_mu * w_norm)
-        
-        # Conserver le format d'origine pour être compatible avec vos fonctions
-        L_expanded.append([x_pushed.tolist(), y_mu])
-        
-    return L_expanded
-
 def minim_error(L, w, maxIter, eta, temp, temp_variable=False):
     """
     Implements the Minimerror learning rule.
@@ -1539,27 +1531,10 @@ def minim_error(L, w, maxIter, eta, temp, temp_variable=False):
     # print(w_k)
     return w_k
 
-def minim_error_avec_recuit(L_ens, w, maxIter, eta, 
-                            temp, temp_target,
-                            grad_stop_pos, grad_stop_neg):
-    
-    if isinstance(L_ens, pd.DataFrame):
-        L_ens_converted = []
-        for index, row in L_ens.iterrows():
-            L_ens_converted.append([row['Donnee'], row['Classe voulue']])
-        L_ens = L_ens_converted
-
-    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
-    y = [float(ex[1]) for ex in L_ens]
+def minim_error_temp_variable(L, w, maxIter, eta, temp):
+    X = [np.asarray(ex[0], dtype=float) for ex in L]
+    y = [float(ex[1]) for ex in L]
     w = np.asarray(w, dtype=float)
-
-    print("In Minimerror")
-    # print("L_ens : ", L_ens)
-    # print("X : ", X)
-    # print("y : ", y)
-    # print("w : ", w)
-    
-
 
     w_history = []
     temp_history = []
@@ -1568,20 +1543,15 @@ def minim_error_avec_recuit(L_ens, w, maxIter, eta,
     w_history.append(w.copy())
     temp_history.append(temp)
     
-    gamme_one_iter = []
     gamma_history = []
     gamma_history.append(0)
+    gamme_one_iter = []
     
-    err = error(L_ens, w)
-    error_history = []
-    error_history.append(err)
-
-    temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)
+    target_t = 0.0001
+    decay_factor = (target_t / temp) ** (1.0/maxIter)
     t_k = temp
     
-    iter = 1
-    while iter <= maxIter and err != 0:
-        err = error(L_ens, w)
+    for iter in range(int(maxIter)):
         beta_k = 1.0 / float(t_k)
         if iter % 25 == 0:
             print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
@@ -1589,153 +1559,26 @@ def minim_error_avec_recuit(L_ens, w, maxIter, eta,
             gamma = stabilite(w, X[mu], y[mu])
             gamme_one_iter.append(gamma)
             arg = (beta_k * gamma) / 2.0
-            if arg > grad_stop_pos:
-                # print("mu", mu)
-                # print("arg > ", grad_stop_pos, " - Skipped")
+            if arg > 0:
                 grad_scalar = 0.0
-            elif arg < grad_stop_neg:
-                # print("mu", mu)
-                # print("arg < ", grad_stop_neg, " - Skipped")
+            elif arg < -5:
                 grad_scalar = 0.0
             else:
                 grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-                # print("mu", mu)
-                # print("grad_scalar : ", grad_scalar)
-
-
+            # grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
+            
             w = w - eta * (grad_scalar * X[mu])
 
-        t_k = t_k * temp_decay_factor  
-        # w = w / np.linalg.norm(w)
-        iter += 1    
-
-
+        t_k = t_k * decay_factor
+            
+        w = w / np.linalg.norm(w)
+        
         # Record state AFTER the update
         w_history.append(w.copy())
         temp_history.append(t_k)
         gamma_history.append(np.mean(gamme_one_iter))
-        
-        err = error(L_ens, w)
-        error_history.append(err)
     
-    return w_history, temp_history, gamma_history, error_history
-
-def minim_error_avec_recuit_test(L_ens, w, maxIter, eta, 
-                            temp, temp_target,
-                            grad_stop_pos, grad_stop_neg):
-    
-    if isinstance(L_ens, pd.DataFrame):
-        L_ens_converted = []
-        for index, row in L_ens.iterrows():
-            L_ens_converted.append([row['Donnee'], row['Classe voulue']])
-        L_ens = L_ens_converted
-
-    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
-    y = [float(ex[1]) for ex in L_ens]
-    w = np.asarray(w, dtype=float)
-
-    print("In Minimerror")
-    # print("L_ens : ", L_ens)
-    # print("X : ", X)
-    # print("y : ", y)
-    # print("w : ", w)
-    
-
-
-    w_history = []
-    temp_history = []
-    
-    # Store initial state
-    w_history.append(w.copy())
-    temp_history.append(temp)
-    
-    gamme_one_iter = []
-    gamma_history = []
-    gamma_history.append(0)
-    
-    err = error(L_ens, w)
-    error_history = []
-    error_history.append(err)
-
-    temp_decay_factor = (temp_target / temp) ** (1.0/maxIter*0.9)
-    t_k = temp
-    
-    iter = 1
-    delta = 0.01
-    expansion_depth = 0
-
-    while iter <= maxIter:
-        err = error(L_ens, w)
-        beta_k = 1.0 / float(t_k)
-        if iter % 25 == 0:
-            print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
-        for mu in range(len(X)):
-            gamma = stabilite(w, X[mu], y[mu])
-            gamme_one_iter.append(gamma)
-            arg = (beta_k * gamma) / 2.0
-            if arg > grad_stop_pos:
-                # print("mu", mu)
-                # print("arg > ", grad_stop_pos, " - Skipped")
-                grad_scalar = 0.0
-            elif arg < grad_stop_neg:
-                # print("mu", mu)
-                # print("arg < ", grad_stop_neg, " - Skipped")
-                grad_scalar = 0.0
-            else:
-                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-                # print("mu", mu)
-                # print("grad_scalar : ", grad_scalar)
-
-
-            w = w - eta * (grad_scalar * X[mu])
-
-        if iter == 4000:
-            current_err = error(L_ens, w)
-
-            print(f"--- Iteration 3000: Starting Expansion to find Zero Error (Current: {current_err}) ---")
-            while current_err > 0:
-                L_ens = expand_universe(L_ens, w, delta)
-                X = [np.asarray(ex[0], dtype=float) for ex in L_ens] # Refresh X coordinates
-                expansion_depth += 1
-                current_err = error(L_ens, w)
-                print(f"--- Zero Error reached in Expanded Universe ---")
-                print(f"--- expansion_depth : {expansion_depth} ---")
-
-            # 2. Re-contraction logic
-            # If we have 0 errors, try to bring the points back (negative delta) 
-            # until a point "touches" the boundary (error > 0)
-        if iter > 4000:
-            current_err = error(L_ens, w)
-            if current_err == 0:
-                # Try a contraction step
-                L_test_contraction = expand_universe(L_ens, w, -delta)
-                
-                # We check if the weights are robust enough to handle the contraction
-                if error(L_test_contraction, w) == 0:
-                    L_ens = L_test_contraction
-                    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
-                    expansion_depth -= 1  # One step closer to reality
-                    print(f"Contraction réussie. Profondeur restante : {expansion_depth}")
-                else:
-                    # If we found an error, we DON'T contract. 
-                    # We stay at the current L_ens and let Minimerror fix the weights
-                    # in the mu loop during the NEXT iteration.
-                    pass
-
-        t_k = t_k * temp_decay_factor  
-        # w = w / np.linalg.norm(w)
-        iter += 1    
-
-
-        # Record state AFTER the update
-        w_history.append(w.copy())
-        temp_history.append(t_k)
-        gamma_history.append(np.mean(gamme_one_iter))
-        
-        err = error(L_ens, w)
-        error_history.append(err)
-    
-    return w_history, temp_history, gamma_history, error_history
+    return w_history, temp_history, gamma_history
 
 def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
     X = [np.asarray(ex[0], dtype=float) for ex in L]
@@ -1875,24 +1718,10 @@ t = True
 # Use a separate flag name so we don't overwrite the function `try_minim_error_ET`
 run_try_minim_error_old = f
 
-# run_try_minim_error_new = t
-run_try_minim_error_new = f
+run_try_minim_error_new = t
 
-# if_import_data = f
-if_import_data = t
-
-if_question_1_0 = f
-# if_question_1_0 = t
-
-
-# if_question_1_1 = f
-if_question_1_1 = t
-
-
-
-# if_question_1_2 = f
-if_question_1_2 = t
-
+if_import_data = f
+# if_import_data = t
 
 if_question_2_et_3 = f
 # if_question_2_et_3 = t
@@ -1959,12 +1788,15 @@ if __name__=="__main__":
         seed_2 = 99
         seed_3 = 21
 
-        nbPoints = 200
+        nbPoints = 2000
         N = 2
         bornes = [-20,20]
         print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
         X_ens = create_points(nbPoints, N, bornes, seed_1)
-
+        
+        facteur = 1
+        bornes_expanded = [bornes[0]*facteur, bornes[0]*facteur]
+        X_ens = expand_universe_from_corner(X_ens, facteur) 
         # print("X_ens:", X_ens)
         
         # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
@@ -1977,192 +1809,37 @@ if __name__=="__main__":
         facter_bruit = 20
         inversedExemple = int(nbPoints/facter_bruit)
         print("inversedExemple :", inversedExemple)
-        # L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
+        L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
         
         # w = np.array(f_init_rand(L_ens, [-1, 1]))
         w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
-        w = w / np.linalg.norm(w)
+        
         print("Initial weights w:", w)
         # print("w:", w)
         nl()
-        maxIter = 1000
+        maxIter = 800
         # maxIter = 2
         # eta = 0.0000075
-        eta = 0.001
+        eta = 0.0001
         print("len(X_ens):", len(X_ens))
 
         temp=0.25
-        temp_target = 0.01
-
-        grad_stop_pos = 20
-        grad_stop_neg = -20
-
         # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_avec_recuit(L_ens, w, 
-                                                         maxIter=maxIter, eta=eta,
-                                                         temp=temp, temp_target=temp_target,
-                                                         grad_stop_pos=grad_stop_pos,
-                                                         grad_stop_neg=grad_stop_neg)
-        
+        # weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=0.25)
+        # weights, temps, gammas = minim_error_temp_variable_dynamic_gammas(L_ens, w, maxIter=maxIter, eta=eta, temp=0.35)
+        weights, temps, gammas = minim_error_temp_variable(L_ens, w, maxIter=maxIter, eta=eta, temp=temp)
+
+        # The lists are now synchronized (both length maxIter + 1)
         PerceptronVisualizer(L_ens, weights, 
                             (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error")
-                            )
+                            (gammas, "Mean Gamma"))
 
         err = error(L_ens, weights[-1])
-        print("last erreur d'apprentissage minimerror : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
+        print("erreur d'apprentissage minimerror : ", err)
 
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
 
         err = error(L_ens, w_prof)
         print("erreur d'apprentissage teacher : ", err)
-    
-    if if_question_1_0:
-        print("-"*25, "QUESTION 1", "-"*25)
-        print("train_df_prepare")
-        print(train_df_prepare)
-        print("test_df_prepare")
-        print(test_df_prepare)
-        nl()
-
-        w = np.array(f_init_Hebb(train_df_prepare, [1000, 1000]))
-        w = w / np.linalg.norm(w)
-
-        print("Initial weights w:", w)
-
-
-        nl()
-        maxIter = 4000
-
-        eta = 0.0001
-
-        temp=0.25
-        temp_target = 0.001
-
-        grad_stop_pos = 0
-        grad_stop_neg = -10
-
-        # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_avec_recuit(train_df_prepare, w, 
-                                                         maxIter=maxIter, eta=eta,
-                                                         temp=temp, temp_target=temp_target,
-                                                         grad_stop_pos=grad_stop_pos,
-                                                         grad_stop_neg=grad_stop_neg)
-
-        weight_norms = [np.linalg.norm(w) for w in weights]
-
-        viz = PerceptronVisualizer(train_df_prepare, weights, 
-                            (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error"),
-                            (weight_norms, "Weight Norm"),
-                            show_plot=False)
-        
-
-        
-        viz.save_tracks_separately(prefix="Q1/Q1 - ")
-
-        stabilites_train = []
-        stabilites_paires = stabilites(train_df_prepare, weights[-1])
-        
-        for paire in stabilites_paires:
-            stabilites_train.append(paire[1])
-        
-        draw_curve_and_save(
-            stabilites_train, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble d entrainement (L_train)", 
-            filename='Q1/Q1 - Stabilité sur ensemble d entrainement',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensemble d entrainement', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )
-
-        err = error(train_df_prepare, weights[-1])
-        print("last erreur d'apprentissage minimerror : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
-
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
-
-        nl()
-        print("-"*25, "TEST SUR test_df_prepare", "-"*25)
-        E_g = error(test_df_prepare, weights[-1])
-
-        print("Erreur de généralisation :", E_g)
-
-
-    if if_question_1_1:
-        complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
-    
-        w = np.array(f_init_Hebb(complete_df_prepare, [1000, 1000]))
-        w = w / np.linalg.norm(w)
-
-        print("Initial weights w:", w)
-
-
-        nl()
-        maxIter = 5000
-
-        eta = 0.0001
-
-        temp=0.25
-        temp_target = 0.001
-
-        grad_stop_pos = 0
-        grad_stop_neg = -10
-
-        # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_avec_recuit_test(complete_df_prepare, w, 
-                                                         maxIter=maxIter, eta=eta,
-                                                         temp=temp, temp_target=temp_target,
-                                                         grad_stop_pos=grad_stop_pos,
-                                                         grad_stop_neg=grad_stop_neg)
-
-        weight_norms = [np.linalg.norm(w) for w in weights]
-
-        viz = PerceptronVisualizer(complete_df_prepare, weights, 
-                            (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error"),
-                            (weight_norms, "Weight Norm"),
-                            show_plot=False)
-        
-
-        
-        viz.save_tracks_separately(prefix="Q1_test/Q1_1 - Train+Test - ")
-
-        stabilites_all = []
-        stabilites_paires = stabilites(complete_df_prepare, weights[-1])
-        
-        for paire in stabilites_paires:
-            stabilites_all.append(paire[1])
-        
-        draw_curve_and_save(
-            stabilites_all, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensembles d entrainement + test (L_train + L_test)", 
-            filename='Q1_test/Q1_1 - Stabilité sur ensembles d entrainement + test',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensembles d entrainement + test', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )
-
-        err = error(complete_df_prepare, weights[-1])
-        print("last erreur d'apprentissage minimerror sur Ensembles d'entrainement + test : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
-
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
-
-
 
     if if_question_2_et_3:
         #QUESTION 2 et 3
