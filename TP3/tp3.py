@@ -1737,6 +1737,120 @@ def minim_error_avec_recuit_test(L_ens, w, maxIter, eta,
     
     return w_history, temp_history, gamma_history, error_history
 
+#Minim error with two different temperatures
+def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
+    """
+    Minimerror avec 2 températures (Beta+ et Beta-).
+    
+    Args:
+        L_ens: Liste des exemples d'apprentissage
+        w_init: Poids initiaux
+        maxIter: Nombre max d'itérations
+        eta: Pas d'apprentissage
+        temp_init: Température de base (T) pour les erreurs (Beta-)
+        ratio_beta: Rapport Beta+ / Beta-. 
+                    Si ratio > 1, on est plus "froid" (strict) sur les exemples corrects.
+                    Si ratio < 1, on est plus "chaud" (souple) sur les exemples corrects.
+    """
+    gamma_history = []
+    # 1. Préparation des données
+    if isinstance(L_ens, pd.DataFrame):
+        L_temp = []
+        for index, row in L_ens.iterrows():
+            L_temp.append([row['Donnee'], row['Classe voulue']])
+        L_ens = L_temp
+
+    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
+    y = [float(ex[1]) for ex in L_ens]
+    w = np.asarray(w_init, dtype=float)
+    
+    # Pour le calcul de l'erreur
+    L_data_simple = list(zip(X, y))
+    
+    # 2. Historiques
+    w_history = [w.copy()]
+    # On stocke T_base (T_) pour l'historique
+    temp_history = [temp_init] 
+    err_init = error(L_data_simple, w)
+    error_history = [err_init]
+    
+    # 3. Paramètres de Recuit (Optionnel, ici on fait un recuit simple sur T_base)
+    t_k = temp_init
+    # On vise une température finale assez basse pour converger
+    t_target = 0.1 
+    decay = (t_target / t_k) ** (1.0 / maxIter)
+
+    print(f"Démarrage Minimerror 2T. T_init={t_k}, Ratio Beta+/Beta-={ratio_beta}")
+
+    for k in range(int(maxIter)):
+        
+        # Calcul des deux Bêtas
+        # Beta_minus (pour les erreurs, gamma < 0)
+        beta_minus = 1.0 / t_k
+        
+        # Beta_plus (pour les exemples appris, gamma > 0)
+        # D'après la formule : Beta+ / Beta- = ratio
+        beta_plus = beta_minus * ratio_beta
+        
+        # Pour le diagnostic
+        if k % 100 == 0:
+            print(f"Iter {k}: T={t_k:.3f}, B-={beta_minus:.2f}, B+={beta_plus:.2f}, Err={error_history[-1]}")
+
+        # Mise à jour stochastique
+        for mu in range(len(X)):
+            # Calcul de la stabilité de l'exemple mu
+            gamma = stabilite(w, X[mu], y[mu])
+            gamma_history.append(gamma)
+            # --- SELECTION DE LA TEMPERATURE ---
+            if gamma >= 0:
+                current_beta = beta_plus  # Exemple bien classé
+            else:
+                current_beta = beta_minus # Exemple mal classé (Erreur)
+            # -----------------------------------
+
+            arg = (current_beta * gamma) / 2.0
+            
+            # Limites numériques pour éviter l'overflow/underflow
+            if arg > 15: # Trop stable, gradient ~ 0
+                grad_scalar = 0.0
+            elif arg < -15: # Trop instable, gradient ~ 0 (optionnel)
+                grad_scalar = 0.0
+            else:
+                # Gradient de V(gamma)
+                # Minimerror minimise V, donc w(t+1) = w(t) - eta * grad
+                # grad_V = - (beta/4) * sech^2(arg)
+                # Le signe 'moins' dans la formule du gradient scalaire compense la descente
+                # Note: Dans la formule physique, on ajoute le terme qui augmente la stabilité.
+                
+                deriv = (current_beta / 4.0) * (1.0 / (np.cosh(arg)**2))
+                # On multiplie par y[mu] car d(gamma)/dw est proportionnel à y*x
+                grad_scalar = -deriv * y[mu]
+
+            # Mise à jour : w = w - eta * gradient
+            # gradient_w = grad_scalar * x
+            # w = w - eta * (grad_scalar * x) 
+            # => w = w + eta * deriv * y * x
+            w = w - eta * (grad_scalar * X[mu])
+
+        # Normalisation (Condition Minimerror ||J||=cste)
+        w_norm = np.linalg.norm(w)
+        if w_norm > 0:
+            w = w / w_norm
+
+        # Mise à jour du recuit (on refroidit T_base)
+        t_k = t_k * decay
+        
+        # Enregistrement
+        w_history.append(w.copy())
+        temp_history.append(t_k)
+        error_history.append(error(L_data_simple, w))
+        
+        # Arrêt précoce si 0 fautes (optionnel, souvent on continue pour maximiser la marge)
+        if error_history[-1] == 0 and k > maxIter/2:
+            break
+
+    return w_history, temp_history, gamma_history, error_history
+
 def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
     X = [np.asarray(ex[0], dtype=float) for ex in L]
     y = [float(ex[1]) for ex in L]
@@ -1886,12 +2000,12 @@ if_question_1_0 = f
 
 
 # if_question_1_1 = f
-if_question_1_1 = t
+if_question_1_1 = f
 
 
 
 # if_question_1_2 = f
-if_question_1_2 = t
+if_question_1_2 = f
 
 
 if_question_2_et_3 = f
@@ -1906,6 +2020,14 @@ if_question_5 = f
 if_question_6 = f
 # if_question_6 = t
 
+if_question_2_1 = f
+# if_question_2_1 = t
+
+if_question_2_2 = f
+# if_question_2_2 = t
+
+if_question_2_3 = t
+# if_question_2_3 = t
 if __name__=="__main__":
 
     if if_import_data:
@@ -2019,6 +2141,208 @@ if __name__=="__main__":
 
         err = error(L_ens, w_prof)
         print("erreur d'apprentissage teacher : ", err)
+
+    if if_question_2_1:
+        seed_1 = 45
+        seed_2 = 99
+        seed_3 = 21
+
+        nbPoints = 200
+        N = 2
+        bornes = [-20,20]
+        print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
+        X_ens = create_points(nbPoints, N, bornes, seed_1)
+
+        # print("X_ens:", X_ens)
+        
+        # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
+        w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
+        # print("w_prof:", w_prof)
+
+        L_ens = L_prof(X_ens, w_prof)
+        # print("L_ens:", L_ens)
+
+        facter_bruit = 20
+        inversedExemple = int(nbPoints/facter_bruit)
+        print("inversedExemple :", inversedExemple)
+        # L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
+        
+        # w = np.array(f_init_rand(L_ens, [-1, 1]))
+        w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+        print("Initial weights w:", w)
+        # print("w:", w)
+        nl()
+        maxIter = 1000
+        # maxIter = 2
+        # eta = 0.0000075
+        eta = 0.001
+        print("len(X_ens):", len(X_ens))
+
+        temp=0.25
+        
+
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_2_temp(L_ens, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=1.0)
+        
+        PerceptronVisualizer(L_ens, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error")
+                            )
+
+        err = error(L_ens, weights[-1])
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+        err = error(L_ens, w_prof)
+        print("erreur d'apprentissage teacher : ", err)
+    
+
+
+
+    if if_question_2_2:
+        print("-"*25, "QUESTION 1", "-"*25)
+        print("train_df_prepare")
+        print(train_df_prepare)
+        print("test_df_prepare")
+        print(test_df_prepare)
+        nl()
+
+        w = np.array(f_init_Hebb(train_df_prepare, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+
+        print("Initial weights w:", w)
+
+
+        nl()
+        maxIter = 4000
+
+        eta = 0.0001
+
+        temp=0.25
+
+
+        # Unpack the two lists directly
+        
+
+            
+        weights, temps, gammas, errors = minim_error_2_temp(train_df_prepare, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=1.18)
+
+        weight_norms = [np.linalg.norm(w) for w in weights]
+
+    
+        viz = PerceptronVisualizer(train_df_prepare, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error"),
+                            (weight_norms, "Weight Norm"),
+                            show_plot=False)
+        
+
+        
+        viz.save_tracks_separately(prefix="Q2/Q2 - ")
+
+        stabilites_train = []
+        stabilites_paires = stabilites(train_df_prepare, weights[-1])
+        
+        for paire in stabilites_paires:
+            stabilites_train.append(paire[1])
+        
+        draw_curve_and_save(
+            stabilites_train, 
+            label_text='Stabilité', 
+            plot_title="Stabilité gamma sur Ensemble d entrainement (L_train)", 
+            filename='Q2/Q2 - Stabilité sur ensemble d entrainement',
+            color='blue', 
+            xlabel='Patrons', 
+            ylabel='Stabilité gamma sur Ensemble d entrainement', 
+            linewidth=2,
+            scatter_or_plot='scatter'
+        )
+
+        err = error(train_df_prepare, weights[-1])
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+        nl()
+        print("-"*25, "TEST SUR test_df_prepare", "-"*25)
+        E_g = error(test_df_prepare, weights[-1])
+    
+
+        print("Erreur de généralisation :", E_g)
+
+
+    if if_question_2_3:
+
+        complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
+    
+        w = np.array(f_init_Hebb(complete_df_prepare, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+
+        print("Initial weights w:", w)
+
+
+        nl()
+        maxIter = 5000
+
+        eta = 0.0001
+
+        temp=0.25
+        temp_target = 0.001
+
+        grad_stop_pos = 0
+        grad_stop_neg = -10
+
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_2_temp(complete_df_prepare, w, 
+                                                         maxIter=maxIter, eta=eta,
+                                                         temp_init=temp, ratio_beta=14)
+
+        weight_norms = [np.linalg.norm(w) for w in weights]
+
+        viz = PerceptronVisualizer(complete_df_prepare, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error"),
+                            (weight_norms, "Weight Norm"),
+                            show_plot=False)
+        
+
+        
+        viz.save_tracks_separately(prefix="Q2_test/Q2_2 - Train+Test - ")
+
+        stabilites_all = []
+        stabilites_paires = stabilites(complete_df_prepare, weights[-1])
+        
+        for paire in stabilites_paires:
+            stabilites_all.append(paire[1])
+        
+        draw_curve_and_save(
+            stabilites_all, 
+            label_text='Stabilité', 
+            plot_title="Stabilité gamma sur Ensembles d entrainement + test (L_train + L_test)", 
+            filename='Q2_test/Q2_2 - Stabilité sur ensembles d entrainement + test',
+            color='blue', 
+            xlabel='Patrons', 
+            ylabel='Stabilité gamma sur Ensembles d entrainement + test', 
+            linewidth=2,
+            scatter_or_plot='scatter'
+        )
+
+        err = error(complete_df_prepare, weights[-1])
+        print("last erreur d'apprentissage minimerror sur Ensembles d'entrainement + test : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+    
     
     if if_question_1_0:
         print("-"*25, "QUESTION 1", "-"*25)

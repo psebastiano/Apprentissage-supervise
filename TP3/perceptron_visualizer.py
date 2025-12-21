@@ -63,6 +63,54 @@ class PerceptronVisualizer:
         self.update_plot()
         if show_plot: plt.show()
 
+    def _setup_2d_scatter(self):
+        """Setup the 2D scatter plot with data points and decision boundary line."""
+        # Extract x and y coordinates from the data
+        # L_ens format: [[point, label], ...] where point = [bias, x1, x2]
+        x_pos = []
+        y_pos = []
+        x_neg = []
+        y_neg = []
+        
+        for item in self.raw_data:
+            point, label = item
+            # Skip bias (first element), extract x1 and x2
+            x_coord = point[1]
+            y_coord = point[2]
+            
+            if label > 0:
+                x_pos.append(x_coord)
+                y_pos.append(y_coord)
+            else:
+                x_neg.append(x_coord)
+                y_neg.append(y_coord)
+        
+        # Plot positive and negative points
+        if x_pos:
+            self.ax_main.scatter(x_pos, y_pos, c='blue', marker='o', s=50, alpha=0.6, label='Class +1')
+        if x_neg:
+            self.ax_main.scatter(x_neg, y_neg, c='red', marker='x', s=50, alpha=0.6, label='Class -1')
+        
+        # Set axis limits with some padding
+        all_x = [item[0][1] for item in self.raw_data]
+        all_y = [item[0][2] for item in self.raw_data]
+        x_min, x_max = min(all_x), max(all_x)
+        y_min, y_max = min(all_y), max(all_y)
+        x_pad = (x_max - x_min) * 0.1
+        y_pad = (y_max - y_min) * 0.1
+        self.ax_main.set_xlim(x_min - x_pad, x_max + x_pad)
+        self.ax_main.set_ylim(y_min - y_pad, y_max + y_pad)
+        
+        # Create initial decision boundary line (will be updated in update_plot)
+        xlim = self.ax_main.get_xlim()
+        self.line, = self.ax_main.plot(xlim, [0, 0], 'g-', lw=2, label='Decision Boundary')
+        
+        self.ax_main.set_xlabel('x1', fontsize=12)
+        self.ax_main.set_ylabel('x2', fontsize=12)
+        self.ax_main.set_title('Perceptron Decision Boundary', fontsize=14)
+        self.ax_main.grid(True, alpha=0.3)
+        self.ax_main.legend(loc='best')
+
     def save_tracks_separately(self, prefix="plot"):
         """Saves each tracking variable into its own individual PNG file."""
         for i, (data, name) in enumerate(self.tracks):
