@@ -1722,6 +1722,8 @@ def minim_error_avec_recuit_test(L_ens, w, maxIter, eta,
                     # in the mu loop during the NEXT iteration.
                     pass
 
+        
+
         t_k = t_k * temp_decay_factor  
         # w = w / np.linalg.norm(w)
         iter += 1    
@@ -1735,7 +1737,9 @@ def minim_error_avec_recuit_test(L_ens, w, maxIter, eta,
         err = error(L_ens, w)
         error_history.append(err)
     
-    return w_history, temp_history, gamma_history, error_history
+    L_ens = expand_universe(L_ens, w, -delta * expansion_depth)
+
+    return w_history, temp_history, gamma_history, error_history, expansion_depth 
 
 def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
     X = [np.asarray(ex[0], dtype=float) for ex in L]
@@ -2096,7 +2100,8 @@ if __name__=="__main__":
 
         print("Erreur de généralisation :", E_g)
 
-
+        #L'impression du perceptron weights[-1]
+        
     if if_question_1_1:
         complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
     
@@ -2118,7 +2123,7 @@ if __name__=="__main__":
         grad_stop_neg = -10
 
         # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_avec_recuit_test(complete_df_prepare, w, 
+        weights, temps, gammas, errors, expansion_depth = minim_error_avec_recuit_test(complete_df_prepare, w, 
                                                          maxIter=maxIter, eta=eta,
                                                          temp=temp, temp_target=temp_target,
                                                          grad_stop_pos=grad_stop_pos,
