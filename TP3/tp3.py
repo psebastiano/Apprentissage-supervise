@@ -1591,6 +1591,96 @@ def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
 
     return w_history, temp_history, gamma_history, error_history
 
+def plot_stabilities_vs_beta(L_ens, w_init, maxIter=1000, eta=0.001, ratio_beta=1.0, 
+                              temp_init_range=None, filename="stabilites_vs_beta.png"):
+    """
+    Entraîne le modèle avec minim_error_2_temp pour différentes valeurs de temp_init,
+    calcule les stabilités finales et trace un graphique en fonction de β = 1/temp_init.
+    
+    Args:
+        L_ens: Ensemble d'entraînement (DataFrame ou liste)
+        w_init: Poids initiaux
+        maxIter: Nombre maximum d'itérations pour l'entraînement
+        eta: Pas d'apprentissage
+        ratio_beta: Rapport Beta+ / Beta- pour minim_error_2_temp
+        temp_init_range: Liste des températures initiales à tester. Si None, utilise [1, 2, ..., 10]
+        filename: Nom du fichier de sauvegarde du graphique
+    """
+    if temp_init_range is None:
+        # Pour obtenir β = 1, 2, ..., 10, on utilise temp_init = 1/β = 1/1, 1/2, ..., 1/10
+        temp_init_range = [1.0 / beta for beta in range(1, 11)]
+    
+    # Correspondance: β = 1 / temp_init
+    beta_values = [1.0 / temp for temp in temp_init_range]
+    
+    all_stabilities = []
+    
+    print("\n" + "="*80)
+    print("CALCUL DES STABILITÉS POUR DIFFÉRENTES VALEURS DE β")
+    print("="*80)
+    
+    for i, temp_init in enumerate(temp_init_range):
+        beta = beta_values[i]
+        print(f"\nEntraînement {i+1}/{len(temp_init_range)}: temp_init={temp_init}, β={beta:.3f}")
+        
+        # Entraîner le modèle avec cette température initiale
+        weights, temps, gammas, errors = minim_error_2_temp(
+            L_ens, w_init, maxIter=maxIter, eta=eta, 
+            temp_init=temp_init, ratio_beta=ratio_beta
+        )
+        
+        # Calculer les stabilités finales avec le dernier poids
+        stabilites_paires = stabilites(L_ens, weights[-1])
+        stabilites_finales = [paire[1] for paire in stabilites_paires]
+        all_stabilities.append(stabilites_finales)
+        
+        err = error(L_ens, weights[-1])
+        print(f"  Erreur finale: {err}, Nombre de stabilités: {len(stabilites_finales)}")
+    
+    # Créer une figure avec plusieurs sous-graphiques (un pour chaque β)
+    n_beta = len(beta_values)
+    n_cols = 5  # Nombre de colonnes dans la grille
+    n_rows = (n_beta + n_cols - 1) // n_cols  # Nombre de lignes nécessaires
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 4 * n_rows))
+    fig.suptitle('Stabilités finales pour chaque valeur de β', fontsize=16, fontweight='bold')
+    
+    # Convertir axes en tableau 1D pour faciliter l'indexation
+    try:
+        axes = axes.flatten()
+    except AttributeError:
+        axes = [axes]
+    
+    # Pour chaque valeur de β, tracer les stabilités dans un sous-graphique
+    for i, beta in enumerate(beta_values):
+        ax = axes[i]
+        stabilites_for_beta = all_stabilities[i]
+        
+        # Indices des exemples (x-axis)
+        indices = range(len(stabilites_for_beta))
+        
+        # Tracer les points de stabilité
+        ax.scatter(indices, stabilites_for_beta, alpha=0.6, s=30)
+        
+        # Ajouter une ligne horizontale à y=0 pour référence
+        ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5, linewidth=1)
+        
+        ax.set_xlabel('Index de l\'exemple', fontsize=10)
+        ax.set_ylabel('Stabilité γ', fontsize=10)
+        ax.set_title(f'β = {beta:.2f}', fontsize=12, fontweight='bold')
+        ax.grid(True, linestyle='--', alpha=0.3)
+    
+    # Masquer les sous-graphiques non utilisés
+    for i in range(n_beta, len(axes)):
+        axes[i].axis('off')
+    
+    plt.tight_layout()
+    plt.savefig(filename, bbox_inches='tight', dpi=300)
+    print(f"\n[OK] Graphique des stabilités en fonction de β sauvegardé dans : **{filename}**")
+    plt.close(fig)
+    
+    return beta_values, all_stabilities
+
 
 
 
@@ -2105,6 +2195,28 @@ if __name__=="__main__":
         best_iteration = errors.index(min_err)   
 
         print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+    # Graphique des stabilités en fonction de β
+    if if_import_data:
+        print("\n" + "="*80)
+        print("GRAPHIQUE DES STABILITÉS EN FONCTION DE β")
+        print("="*80)
+        
+        # Utiliser l'ensemble d'entraînement pour calculer les stabilités
+        w_init_beta = np.array(f_init_Hebb(train_df_prepare, [1000, 1000]))
+        w_init_beta = w_init_beta / np.linalg.norm(w_init_beta)
+        
+        # Pour obtenir β = 1, 2, ..., 10, on utilise temp_init = 1/β = 1/1, 1/2, ..., 1/10
+        temp_init_range = [1.0 / beta for beta in range(1, 11)]  # β = 1, 2, ..., 10
+        plot_stabilities_vs_beta(
+            L_ens=train_df_prepare,
+            w_init=w_init_beta,
+            maxIter=1000,
+            eta=0.0001,
+            ratio_beta=1.0,
+            temp_init_range=temp_init_range,
+            filename="stabilites_vs_beta.png"
+        )
 
     print("\n" + "="*80)
     print("FIN DU TP3")
