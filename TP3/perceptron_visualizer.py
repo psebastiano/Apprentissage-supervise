@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 import pandas as pd
 
 class PerceptronVisualizer:
@@ -8,7 +9,7 @@ class PerceptronVisualizer:
         self.W_history = [np.ravel(w) for w in W_history]
         self.dim = len(self.W_history[0])
         self.is_2d = (self.dim == 3)
-        self.tracks = meta_tracks # List of tuples: (data_list, "Name")
+        self.tracks = meta_tracks 
         self.ind = 0
         
         if isinstance(data_input, pd.DataFrame):
@@ -64,71 +65,90 @@ class PerceptronVisualizer:
         if show_plot: plt.show()
 
     def _setup_2d_scatter(self):
-        """Setup the 2D scatter plot with data points and decision boundary line."""
-        # Extract x and y coordinates from the data
-        # L_ens format: [[point, label], ...] where point = [bias, x1, x2]
-        x_pos = []
-        y_pos = []
-        x_neg = []
-        y_neg = []
-        
+        self.x_pos, self.y_pos, self.x_neg, self.y_neg = [], [], [], []
         for item in self.raw_data:
             point, label = item
-            # Skip bias (first element), extract x1 and x2
-            x_coord = point[1]
-            y_coord = point[2]
-            
+            x_coord, y_coord = point[1], point[2]
             if label > 0:
-                x_pos.append(x_coord)
-                y_pos.append(y_coord)
+                self.x_pos.append(x_coord); self.y_pos.append(y_coord)
             else:
-                x_neg.append(x_coord)
-                y_neg.append(y_coord)
+                self.x_neg.append(x_coord); self.y_neg.append(y_coord)
         
-        # Plot positive and negative points
-        if x_pos:
-            self.ax_main.scatter(x_pos, y_pos, c='blue', marker='o', s=50, alpha=0.6, label='Class +1')
-        if x_neg:
-            self.ax_main.scatter(x_neg, y_neg, c='red', marker='x', s=50, alpha=0.6, label='Class -1')
+        if self.x_pos: self.ax_main.scatter(self.x_pos, self.y_pos, c='blue', marker='o', s=50, alpha=0.6, label='Class +1')
+        if self.x_neg: self.ax_main.scatter(self.x_neg, self.y_neg, c='red', marker='x', s=50, alpha=0.6, label='Class -1')
         
-        # Set axis limits with some padding
-        all_x = [item[0][1] for item in self.raw_data]
-        all_y = [item[0][2] for item in self.raw_data]
-        x_min, x_max = min(all_x), max(all_x)
-        y_min, y_max = min(all_y), max(all_y)
-        x_pad = (x_max - x_min) * 0.1
-        y_pad = (y_max - y_min) * 0.1
-        self.ax_main.set_xlim(x_min - x_pad, x_max + x_pad)
-        self.ax_main.set_ylim(y_min - y_pad, y_max + y_pad)
+        all_x = [item[0][1] for item in self.raw_data]; all_y = [item[0][2] for item in self.raw_data]
+        self.x_lims = (min(all_x), max(all_x)); self.y_lims = (min(all_y), max(all_y))
+        x_pad, y_pad = (self.x_lims[1] - self.x_lims[0]) * 0.1, (self.y_lims[1] - self.y_lims[0]) * 0.1
+        self.ax_main.set_xlim(self.x_lims[0] - x_pad, self.x_lims[1] + x_pad)
+        self.ax_main.set_ylim(self.y_lims[0] - y_pad, self.y_lims[1] + y_pad)
         
-        # Create initial decision boundary line (will be updated in update_plot)
         xlim = self.ax_main.get_xlim()
         self.line, = self.ax_main.plot(xlim, [0, 0], 'g-', lw=2, label='Decision Boundary')
-        
-        self.ax_main.set_xlabel('x1', fontsize=12)
-        self.ax_main.set_ylabel('x2', fontsize=12)
-        self.ax_main.set_title('Perceptron Decision Boundary', fontsize=14)
-        self.ax_main.grid(True, alpha=0.3)
-        self.ax_main.legend(loc='best')
+        self.ax_main.set_xlabel('x1'); self.ax_main.set_ylabel('x2')
+        self.ax_main.grid(True, alpha=0.3); self.ax_main.legend(loc='best')
 
     def save_tracks_separately(self, prefix="plot"):
-        """Saves each tracking variable into its own individual PNG file."""
         for i, (data, name) in enumerate(self.tracks):
-            # Create a temporary figure for just this track
             temp_fig, temp_ax = plt.subplots(figsize=(8, 4))
             temp_ax.plot(data, color='steelblue', lw=2)
             temp_ax.set_title(f"Evolution of {name}")
-            temp_ax.set_ylabel(name)
-            temp_ax.set_xlabel("Iteration")
+            temp_ax.set_ylabel(name); temp_ax.set_xlabel("Iteration")
             temp_ax.grid(True, alpha=0.3)
-            
-            # Create filename: e.g., "plot_Temperature.png"
             clean_name = name.replace(" ", "_").lower()
-            filename = f"{prefix}_{clean_name}.png"
-            
+            filename = f"{prefix}{clean_name}.png"
             temp_fig.savefig(filename, bbox_inches='tight', dpi=150)
-            plt.close(temp_fig) # Close to free up memory
-            print(f"Saved: {filename}")
+            plt.close(temp_fig)
+            print(f"Saved track: {filename}")
+
+    def save_final_2d_plot(self, filename="final_boundary.png"):
+        """Saves ONLY the 2D plot using the final weight in the history."""
+        if not self.is_2d: return
+        
+        # 1. Create a clean standalone figure for the final result
+        temp_fig, temp_ax = plt.subplots(figsize=(8, 6))
+        
+        # 2. Re-plot the data points
+        if self.x_pos: temp_ax.scatter(self.x_pos, self.y_pos, c='blue', marker='o', s=50, alpha=0.6, label='Class +1')
+        if self.x_neg: temp_ax.scatter(self.x_neg, self.y_neg, c='red', marker='x', s=50, alpha=0.6, label='Class -1')
+        
+        # 3. Calculate and plot the FINAL boundary (last index of history)
+        w_final = self.W_history[-1]
+        w0, w1, w2 = w_final[0], w_final[1], w_final[2]
+        
+        # Set limits same as main plot
+        x_pad = (self.x_lims[1] - self.x_lims[0]) * 0.1
+        y_pad = (self.y_lims[1] - self.y_lims[0]) * 0.1
+        temp_ax.set_xlim(self.x_lims[0] - x_pad, self.x_lims[1] + x_pad)
+        temp_ax.set_ylim(self.y_lims[0] - y_pad, self.y_lims[1] + y_pad)
+        
+        xlim = np.array(temp_ax.get_xlim())
+        if abs(w2) > 1e-9:
+            y_line = -(w1 * xlim + w0) / w2
+            temp_ax.plot(xlim, y_line, 'g-', lw=2, label='Final Decision Boundary')
+        
+        temp_ax.set_title(f"Final Perceptron Boundary (Iter {len(self.W_history)-1})")
+        temp_ax.set_xlabel('x1'); temp_ax.set_ylabel('x2')
+        temp_ax.grid(True, alpha=0.3); temp_ax.legend(loc='best')
+        
+        # 4. Save and close
+        temp_fig.savefig(filename, bbox_inches='tight', dpi=150)
+        plt.close(temp_fig)
+        print(f"Saved isolated final 2D plot: {filename}")
+
+    def save_training_video(self, filename="training_evolution.mp4", fps=10):
+        if not self.is_2d: return
+        print("Generating video...")
+        def animate(i):
+            self.ind = i
+            self.update_plot()
+            return [self.line] + self.track_dots
+        anim = FuncAnimation(self.fig, animate, frames=len(self.W_history), interval=1000/fps)
+        try:
+            anim.save(filename, writer=FFMpegWriter(fps=fps))
+        except:
+            anim.save(filename.replace(".mp4", ".gif"), writer='pillow', fps=fps)
+        print(f"Video saved: {filename}")
 
     def update_plot(self):
         w_k = self.W_history[self.ind]
@@ -138,7 +158,6 @@ class PerceptronVisualizer:
             if abs(w2) > 1e-9:
                 y_line = -(w1 * xlim + w0) / w2
                 self.line.set_data(xlim, y_line)
-        
         for i, (data, name) in enumerate(self.tracks):
             if self.ind < len(data):
                 self.track_dots[i].set_data([self.ind], [data[self.ind]])

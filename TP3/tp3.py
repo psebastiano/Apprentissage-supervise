@@ -1333,151 +1333,6 @@ def pretraitement(test_df, train_df):
     
     return train_df_prepare,test_df_prepare
 
-"""    
-Fonctions tp2 - A SUPPRIMER A TERMES
-def run_training_exo_1(data, training_algo, train, test, train_prepare, test_prepare, question_tag, if_show=True):
-        biais_range = [-1, 1]
-        perceptron = f_init_rand(train, biais_range)
-        
-        #Entrainement
-        eta = 0.1
-        maxIter = 10000
-        trained_perceptron, _ ,training_errors = training_algo(perceptron, train_prepare, eta, maxIter) #La fonction retourne aussi le nombre d'itérations
-        
-        fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
-        draw_curve(ax_2d, training_errors, f"Erreur d'apprentissage - {question_tag}", color='red')
-        fig_2d.savefig(f"Erreur d'apprentissage - {question_tag}.png")
-        plt.close(fig_2d)
-
-        #Calcul de l'erreur
-        training_error = error(train_prepare, trained_perceptron)
-        generalisation_error = error(test_prepare, trained_perceptron)
-        
-        print("Erreur d'entraînement : ", training_error)
-        print('Error de généralisation : ', generalisation_error)
-
-        #Calcul des stabilités
-        stabilites_paires = stabilites(train_prepare, trained_perceptron)
-        
-        stabilites_list=[]
-        for paire in stabilites_paires:
-            stabilites_list.append(paire[1])
-        
-
-        return (trained_perceptron,
-                training_error,
-                generalisation_error,
-                stabilites_paires,
-                stabilites_list,
-        )
-
-def question_4(train_df_prepare, test_df_prepare, initialization, target_error, eta, maxIter=10000):   
-                
-    print(f"\n--- Initialisation: {initialization.__name__}, Delta (eta): {eta} ---")
-    
-    biais = [-1, 1]
-    w_init =initialization(train_df_prepare, biais)
-
-    # Apprentissage avec Pocket
-    w_pocket, Ea, n_iter, error_history = pocket_algorithm(
-        train_df_prepare, w_init, eta, maxIter, target_error
-    )
-    
-    # Test sur test
-    Eg = error(test_df_prepare, w_pocket)
-
-    print(f"Ea: {Ea}/{len(train_df_prepare)} = {Ea/len(train_df_prepare)*100:.2f}%")
-    print(f"Eg: {Eg}/{len(test_df_prepare)} = {Eg/len(test_df_prepare)*100:.2f}%")
-    print(f"Itérations: {n_iter}")
-
-    return initialization.__name__, eta, Ea, Eg, n_iter, error_history, w_pocket
-
-def question_5(train_df_prepare, test_df_prepare, training_algo, maxIter=10000):
-    # Créer l'ensemble complet L = train + test
-    complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
-    print(f"\n{'='*80}")
-    print("INFORMATIONS SUR LES DONNÉES")
-    print(f"{'='*80}")
-    print(f"Train: {len(train_df_prepare)} exemples")
-    print(f"Test: {len(test_df_prepare)} exemples")
-    print(f"Ensemble complet L: {len(complete_df_prepare)} exemples")
-    print(f"Nombre de dimensions N: 60")
-    print(f"Nombre de poids (N+1): 61")
-    print(f"{'='*80}\n")
-   
-    print("Note: Utilisation de l'algorithme perceptron ONLINE (justification basée sur TP1)")
-    print("     - Plus efficace en mémoire pour de grands ensembles")
-    print("     - Mise à jour immédiate des poids après chaque exemple")
-    print("     - Convergence généralement plus rapide pour ce type de problème\n")
-
-    # Affichage des poids
-    # n()
-    # print("CHECKPOINT 1")
-
-
-    # Paramètres d'apprentissage
-    biais_range = [-1, 1]
-    eta = 0.1
-    # Initialisation et apprentissage
-    w_init = f_init_rand(complete_df_prepare, biais_range)
-
-    #Penser à plotter training_errors
-    w_trained, n_iter, training_errors = training_algo(w_init, complete_df_prepare, eta, maxIter)
-    
-    fig_2d, ax_2d = plt.subplots(figsize=(12, 10))
-    draw_curve(ax_2d, training_errors, "Erreur d'apprentissage - Online - Ensemble complet", color='red')
-    fig_2d.savefig("Q5/Q5_Erreur d'apprentissage - Online - Ensemble complet.png")
-    plt.close(fig_2d)
-
-    # print("CHECKPOINT 0")
-    # n()
-    # Calcul des erreurs
-    err = error(complete_df_prepare, w_trained)
-    
-    print_weights(w_trained, "Poids du perceptron")
-    n()
-    print(f"Erreur à l'itération {n_iter} : {err}/{len(complete_df_prepare)}")
-
-    return w_trained, n_iter, err, complete_df_prepare
-    
-def question_6(train_df_prepare, test_df_prepare, eta, maxIter=10000):
-        # Mélanger les données
-    complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
-    L_shuffled = complete_df_prepare.sample(frac=1, random_state=exp).reset_index(drop=True)
-    
-    # Diviser: 50% LA, 25% LV, 25% LT
-    n_total = len(L_shuffled)
-    n_LA = int(0.5 * n_total)
-    n_LV = int(0.25 * n_total)
-    
-    LA = L_shuffled[:n_LA].copy()
-    LV = L_shuffled[n_LA:n_LA+n_LV].copy()
-    LT = L_shuffled[n_LA+n_LV:].copy()
-    
-    print(f"LA: {len(LA)} exemples, LV: {len(LV)} exemples, LT: {len(LT)} exemples")
-    
-    # Initialisation
-    biais = [-1, 1]
-    w_init_ES = f_init_rand(LA, biais)
-    
-    # Early Stopping
-    w_best_ES, best_Ev, n_iter_ES, train_errors_ES, val_errors_ES = early_stopping(
-        LA, LV, w_init_ES, eta, maxIter, patience=20
-    )
-    
-    # Calcul des erreurs
-    Ea_ES = error(LA, w_best_ES)
-    Ev_ES = best_Ev
-    Et_ES = error(LT, w_best_ES)
- 
-
-    print(f"Ea: {Ea_ES}/{len(LA)} = {Ea_ES/len(LA)*100:.2f}%")
-    print(f"Ev: {Ev_ES}/{len(LV)} = {Ev_ES/len(LV)*100:.2f}%")
-    print(f"Et: {Et_ES}/{len(LT)} = {Et_ES/len(LT)*100:.2f}%")
-    print(f"Itérations: {n_iter_ES}")
-
-    return Ea_ES, Ev_ES, Et_ES, n_iter_ES, w_best_ES, train_errors_ES, val_errors_ES
-"""
 
 def expand_universe(L_ens, w, delta):
     """
@@ -1620,127 +1475,6 @@ def minim_error_avec_recuit(L_ens, w, maxIter, eta,
     
     return w_history, temp_history, gamma_history, error_history
 
-def minim_error_avec_recuit_test(L_ens, w, maxIter, eta, 
-                            temp, temp_target,
-                            grad_stop_pos, grad_stop_neg):
-    
-    if isinstance(L_ens, pd.DataFrame):
-        L_ens_converted = []
-        for index, row in L_ens.iterrows():
-            L_ens_converted.append([row['Donnee'], row['Classe voulue']])
-        L_ens = L_ens_converted
-
-    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
-    y = [float(ex[1]) for ex in L_ens]
-    w = np.asarray(w, dtype=float)
-
-    print("In Minimerror")
-    # print("L_ens : ", L_ens)
-    # print("X : ", X)
-    # print("y : ", y)
-    # print("w : ", w)
-    
-
-
-    w_history = []
-    temp_history = []
-    
-    # Store initial state
-    w_history.append(w.copy())
-    temp_history.append(temp)
-    
-    gamme_one_iter = []
-    gamma_history = []
-    gamma_history.append(0)
-    
-    err = error(L_ens, w)
-    error_history = []
-    error_history.append(err)
-
-    temp_decay_factor = (temp_target / temp) ** (1.0/maxIter*0.9)
-    t_k = temp
-    
-    iter = 1
-    delta = 0.01
-    expansion_depth = 0
-
-    while iter <= maxIter:
-        err = error(L_ens, w)
-        beta_k = 1.0 / float(t_k)
-        if iter % 25 == 0:
-            print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
-        for mu in range(len(X)):
-            gamma = stabilite(w, X[mu], y[mu])
-            gamme_one_iter.append(gamma)
-            arg = (beta_k * gamma) / 2.0
-            if arg > grad_stop_pos:
-                # print("mu", mu)
-                # print("arg > ", grad_stop_pos, " - Skipped")
-                grad_scalar = 0.0
-            elif arg < grad_stop_neg:
-                # print("mu", mu)
-                # print("arg < ", grad_stop_neg, " - Skipped")
-                grad_scalar = 0.0
-            else:
-                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-                # print("mu", mu)
-                # print("grad_scalar : ", grad_scalar)
-
-
-            w = w - eta * (grad_scalar * X[mu])
-
-        if iter == 4000:
-            current_err = error(L_ens, w)
-
-            print(f"--- Iteration 3000: Starting Expansion to find Zero Error (Current: {current_err}) ---")
-            while current_err > 0:
-                L_ens = expand_universe(L_ens, w, delta)
-                X = [np.asarray(ex[0], dtype=float) for ex in L_ens] # Refresh X coordinates
-                expansion_depth += 1
-                current_err = error(L_ens, w)
-                print(f"--- Zero Error reached in Expanded Universe ---")
-                print(f"--- expansion_depth : {expansion_depth} ---")
-
-            # 2. Re-contraction logic
-            # If we have 0 errors, try to bring the points back (negative delta) 
-            # until a point "touches" the boundary (error > 0)
-        if iter > 4000:
-            current_err = error(L_ens, w)
-            if current_err == 0:
-                # Try a contraction step
-                L_test_contraction = expand_universe(L_ens, w, -delta)
-                
-                # We check if the weights are robust enough to handle the contraction
-                if error(L_test_contraction, w) == 0:
-                    L_ens = L_test_contraction
-                    X = [np.asarray(ex[0], dtype=float) for ex in L_ens]
-                    expansion_depth -= 1  # One step closer to reality
-                    print(f"Contraction réussie. Profondeur restante : {expansion_depth}")
-                else:
-                    # If we found an error, we DON'T contract. 
-                    # We stay at the current L_ens and let Minimerror fix the weights
-                    # in the mu loop during the NEXT iteration.
-                    pass
-
-        
-
-        t_k = t_k * temp_decay_factor  
-        # w = w / np.linalg.norm(w)
-        iter += 1    
-
-
-        # Record state AFTER the update
-        w_history.append(w.copy())
-        temp_history.append(t_k)
-        gamma_history.append(np.mean(gamme_one_iter))
-        
-        err = error(L_ens, w)
-        error_history.append(err)
-    
-    L_ens = expand_universe(L_ens, w, -delta * expansion_depth)
-
-    return w_history, temp_history, gamma_history, error_history, expansion_depth 
-
 #Minim error with two different temperatures
 def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
     """
@@ -1756,7 +1490,9 @@ def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
                     Si ratio > 1, on est plus "froid" (strict) sur les exemples corrects.
                     Si ratio < 1, on est plus "chaud" (souple) sur les exemples corrects.
     """
+    gamma_one_iter = []
     gamma_history = []
+
     # 1. Préparation des données
     if isinstance(L_ens, pd.DataFrame):
         L_temp = []
@@ -1784,7 +1520,7 @@ def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
     t_target = 0.1 
     decay = (t_target / t_k) ** (1.0 / maxIter)
 
-    print(f"Démarrage Minimerror 2T. T_init={t_k}, Ratio Beta+/Beta-={ratio_beta}")
+    print(f"Démarrage Minimerror 2T. T_init={t_k}, T_target={t_target}, Ratio Beta+/Beta-={ratio_beta}")
 
     for k in range(int(maxIter)):
         
@@ -1804,7 +1540,7 @@ def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
         for mu in range(len(X)):
             # Calcul de la stabilité de l'exemple mu
             gamma = stabilite(w, X[mu], y[mu])
-            gamma_history.append(gamma)
+            gamma_one_iter.append(gamma)
             # --- SELECTION DE LA TEMPERATURE ---
             if gamma >= 0:
                 current_beta = beta_plus  # Exemple bien classé
@@ -1848,181 +1584,34 @@ def minim_error_2_temp(L_ens, w_init, maxIter, eta, temp_init, ratio_beta=1.0):
         w_history.append(w.copy())
         temp_history.append(t_k)
         error_history.append(error(L_data_simple, w))
-        
+        gamma_history.append(np.mean(gamma_one_iter))
         # Arrêt précoce si 0 fautes (optionnel, souvent on continue pour maximiser la marge)
         if error_history[-1] == 0 and k > maxIter/2:
             break
 
     return w_history, temp_history, gamma_history, error_history
 
-def minim_error_temp_variable_dynamic_gammas(L, w, maxIter, eta, temp):
-    X = [np.asarray(ex[0], dtype=float) for ex in L]
-    y = [float(ex[1]) for ex in L]
-    w = np.asarray(w, dtype=float)
 
-    w_history = []
-    temp_history = []
-    gamma_history = []
-    
-    # Store initial state
-    w_history.append(w.copy())
-    temp_history.append(temp)
-    gamma_history.append(0)
-    
-    t_k = temp
-    
-    for iter in range(int(maxIter)):
-        beta_k = 1.0 / float(t_k)
-        print(f"Iteration {iter+1}/{int(maxIter)}, Temp: {t_k:.4f}")
-        
-        # 1. Pre-evaluate all gammas to find the dynamic range for this iteration
-        all_gammas = np.array([stabilite(w, X[mu], y[mu]) for mu in range(len(X))])
-        g_min, g_max = np.min(all_gammas), np.max(all_gammas)
-        
-        gamme_one_iter = []
-        
-        # 2. Online-style update using mapped gammas
-        for mu in range(len(X)):
-            raw_gamma = all_gammas[mu]
-            
-            # Linear mapping to [-1, 1]
-            if g_max != g_min:
-                gamma_mapped = 2.0 * (raw_gamma - g_min) / (g_max - g_min) - 1.0
-            else:
-                gamma_mapped = 0.0 # Avoid division by zero if all gammas are identical
-            
-            gamme_one_iter.append(gamma_mapped)
-            
-            # Calculate argument using the mapped gamma
-            arg = (beta_k * gamma_mapped) / 2.0
-            
-            # Gradient calculation with safety check
-            if abs(arg) > 25:
-                grad_scalar = 0.0
-            else:
-                # Use np.cosh safely
-                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-            
-            # Online update: update w immediately for each example
-            w = w - eta * (grad_scalar * X[mu])
 
-        # Cooling schedule
-        # if iter % 10 == 0 and iter > 0:
-        #     t_k = t_k * 0.95
-            
-        # Ensure w stays on the unit sphere
-        norm_w = np.linalg.norm(w)
-        if norm_w > 0:
-            w = w / norm_w
-        
-        # Record state
-        w_history.append(w.copy())
-        temp_history.append(t_k)
-        gamma_history.append(np.mean(gamme_one_iter))
-    
-    return w_history, temp_history, gamma_history
-
-def minim_error_temp_variable_batch(L, w, maxIter, eta, temp):
-    X = [np.asarray(ex[0], dtype=float) for ex in L]
-    y = [float(ex[1]) for ex in L]
-    w = np.asarray(w, dtype=float)
-
-    w_history = []
-    temp_history = []
-    
-    # Store initial state
-    w_history.append(w.copy())
-    temp_history.append(temp)
-    
-    gamma_history = []
-    gamma_history.append(0)
-    gamme_one_iter = []
-    
-    t_k = temp
-    for iter in range(int(maxIter)):
-        beta_k = 1.0 / float(t_k)
-        print(f"Iteration {iter+1}/{int(maxIter)}, Température t_k: {t_k}, Beta_k: {beta_k}")
-        arg_vect = []
-        for mu in range(len(X)):
-            gamma = stabilite(w, X[mu], y[mu])
-            gamme_one_iter.append(gamma)
-            print("gamma:", gamma)
-            arg = (beta_k * gamma) / 2.0
-            print("arg:", arg)
-            if abs(arg) > 20:
-                grad_scalar = 0.0
-            else:
-                grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-            arg_vect.append(grad_scalar)
-        arg_vect = np.array(arg_vect / np.linalg.norm(arg_vect))
-            # grad_scalar = - (beta_k / 4.0) * (1.0 / (np.cosh(arg)**2)) * y[mu]
-        gradient_sum = np.sum(arg_vect[:, np.newaxis] * X, axis=0)
-        w = w - eta * gradient_sum
-
-        # Cooling schedule
-        # if iter % 10 == 0 and iter > 0:
-        #     t_k = t_k * 0.95
-            
-        w = w / np.linalg.norm(w)
-        
-        # Record state AFTER the update
-        w_history.append(w.copy())
-        temp_history.append(t_k)
-        gamma_history.append(np.mean(gamme_one_iter))
-    
-    return w_history, temp_history, gamma_history
-
-def run_minim_error(L, w, algo, eta, maxIter):
-    # temp = [0.01, 0.1, 0.5, 1.0, 5.0, 10.0]
-    temp = [0.25] #T_k - La température magique de Keli 
- 
-    perceptrons_trained = []
-
-    for t in temp:
-        w_trained = algo(L, w, maxIter, eta, t)
-        perceptrons_trained.append(w_trained)
-        # err = error(L, w_trained)
-        # print(f"Température: {t}, Erreur: {err}/{len(L)} = {err/len(L)*100:.2f}%")
-
-    return perceptrons_trained# #err
 
 f = False
 t = True
 
-# try_minim_error_ET = f
-# Use a separate flag name so we don't overwrite the function `try_minim_error_ET`
-run_try_minim_error_old = f
-
-# run_try_minim_error_new = t
-run_try_minim_error_new = f
-
 # if_import_data = f
 if_import_data = t
 
-if_question_1_0 = f
-# if_question_1_0 = t
-
-
-# if_question_1_1 = f
 if_question_1_1 = f
+# if_question_1_1 = t
 
-
-
-# if_question_1_2 = f
 if_question_1_2 = f
+# if_question_1_2 = t
+
+if_question_1_3 = f
+# if_question_1_3 = t
 
 
-if_question_2_et_3 = f
-# if_question_2_et_3 = t
-
-if_question_4 = f
-# if_question_4 = t
-
-if_question_5 = f
-# if_question_5 = t
-
-if_question_6 = f
-# if_question_6 = t
+if_question_2_0 = f
+# if_question_2_0 = t
 
 if_question_2_1 = f
 # if_question_2_1 = t
@@ -2030,8 +1619,9 @@ if_question_2_1 = f
 if_question_2_2 = f
 # if_question_2_2 = t
 
+# if_question_2_3 = f
 if_question_2_3 = t
-# if_question_2_3 = t
+
 if __name__=="__main__":
 
     if if_import_data:
@@ -2040,316 +1630,10 @@ if __name__=="__main__":
 
         #PRETRAITEMENT
         train_df_prepare, test_df_prepare = pretraitement(test_df, train_df)
-
-    if run_try_minim_error_old:
-        N = 2
-        X_ens = X(200, N)
-        X_ens = [[1.0] + x for x in X_ens] # Ajouter le biais
-        X_ens = np.array(X_ens)
-        print(X_ens)
-
-        L_OU = L(f_OU, X_ens)
-        L_AND = L(f_AND, X_ens)
-        L_XOR = L(f_XOR, X_ens)
-
-        print(L_OU)
-        print(L_AND)
-        print(L_XOR)
-        print("X:", X_ens)
-
-        # L_test = L_AND
-        L_test = L_XOR
-
-        w = np.array(f_init_rand(L_test, [-1, 1]))
-        
-        print("w:", w)
-        n()
-        maxIter = 2000
-        # maxIter = 2
-        eta = 0.1
-
-        # perceptrons_trained, err = try_minim_error_ET(L_test, w, algo=minim_error, eta=eta, maxIter=maxIter)
-        perceptrons_trained = run_minim_error(L_test, w, algo=minim_error, eta=eta, maxIter=maxIter)
-        
-        print(perceptrons_trained)
-        PerceptronVisualizer(L_test, perceptrons_trained[0])
-        # PerceptronVisualizer(L_test, perceptrons_trained[1])
     
-    if run_try_minim_error_new:
-        
-        # for n in range(1,4):
-        #     print("n: " , n)
-        #     print("Points " , create_points(2, 2, [-1,1]))
-            
-        seed_1 = 45
-        seed_2 = 99
-        seed_3 = 21
-
-        nbPoints = 200
-        N = 2
-        bornes = [-20,20]
-        print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
-        X_ens = create_points(nbPoints, N, bornes, seed_1)
-
-        # print("X_ens:", X_ens)
-        
-        # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
-        w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
-        # print("w_prof:", w_prof)
-
-        L_ens = L_prof(X_ens, w_prof)
-        # print("L_ens:", L_ens)
-
-        facter_bruit = 20
-        inversedExemple = int(nbPoints/facter_bruit)
-        print("inversedExemple :", inversedExemple)
-        # L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
-        
-        # w = np.array(f_init_rand(L_ens, [-1, 1]))
-        w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
-        w = w / np.linalg.norm(w)
-        print("Initial weights w:", w)
-        # print("w:", w)
-        nl()
-        maxIter = 1000
-        # maxIter = 2
-        # eta = 0.0000075
-        eta = 0.001
-        print("len(X_ens):", len(X_ens))
-
-        temp=0.25
-        temp_target = 0.01
-
-        grad_stop_pos = 20
-        grad_stop_neg = -20
-
-        # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_avec_recuit(L_ens, w, 
-                                                         maxIter=maxIter, eta=eta,
-                                                         temp=temp, temp_target=temp_target,
-                                                         grad_stop_pos=grad_stop_pos,
-                                                         grad_stop_neg=grad_stop_neg)
-        
-        PerceptronVisualizer(L_ens, weights, 
-                            (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error")
-                            )
-
-        err = error(L_ens, weights[-1])
-        print("last erreur d'apprentissage minimerror : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
-
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
-
-        err = error(L_ens, w_prof)
-        print("erreur d'apprentissage teacher : ", err)
-
-    if if_question_2_1:
-        seed_1 = 45
-        seed_2 = 99
-        seed_3 = 21
-
-        nbPoints = 200
-        N = 2
-        bornes = [-20,20]
-        print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
-        X_ens = create_points(nbPoints, N, bornes, seed_1)
-
-        # print("X_ens:", X_ens)
-        
-        # w_prof = init_perceptron_prof(N, bornes_expanded, seed_2)
-        w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
-        # print("w_prof:", w_prof)
-
-        L_ens = L_prof(X_ens, w_prof)
-        # print("L_ens:", L_ens)
-
-        facter_bruit = 20
-        inversedExemple = int(nbPoints/facter_bruit)
-        print("inversedExemple :", inversedExemple)
-        # L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
-        
-        # w = np.array(f_init_rand(L_ens, [-1, 1]))
-        w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
-        w = w / np.linalg.norm(w)
-        print("Initial weights w:", w)
-        # print("w:", w)
-        nl()
-        maxIter = 1000
-        # maxIter = 2
-        # eta = 0.0000075
-        eta = 0.001
-        print("len(X_ens):", len(X_ens))
-
-        temp=0.25
-        
-
-        # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_2_temp(L_ens, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=1.0)
-        
-        PerceptronVisualizer(L_ens, weights, 
-                            (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error")
-                            )
-
-        err = error(L_ens, weights[-1])
-        print("last erreur d'apprentissage minimerror : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
-
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
-
-        err = error(L_ens, w_prof)
-        print("erreur d'apprentissage teacher : ", err)
-    
-
-
-
-    if if_question_2_2:
-        print("-"*25, "QUESTION 1", "-"*25)
-        print("train_df_prepare")
-        print(train_df_prepare)
-        print("test_df_prepare")
-        print(test_df_prepare)
-        nl()
-
-        w = np.array(f_init_Hebb(train_df_prepare, [1000, 1000]))
-        w = w / np.linalg.norm(w)
-
-        print("Initial weights w:", w)
-
-
-        nl()
-        maxIter = 4000
-
-        eta = 0.0001
-
-        temp=0.25
-
-
-        # Unpack the two lists directly
-        
-
-            
-        weights, temps, gammas, errors = minim_error_2_temp(train_df_prepare, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=1.18)
-
-        weight_norms = [np.linalg.norm(w) for w in weights]
-
-    
-        viz = PerceptronVisualizer(train_df_prepare, weights, 
-                            (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error"),
-                            (weight_norms, "Weight Norm"),
-                            show_plot=False)
-        
-
-        
-        viz.save_tracks_separately(prefix="Q2/Q2 - ")
-
-        stabilites_train = []
-        stabilites_paires = stabilites(train_df_prepare, weights[-1])
-        
-        for paire in stabilites_paires:
-            stabilites_train.append(paire[1])
-        
-        draw_curve_and_save(
-            stabilites_train, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble d entrainement (L_train)", 
-            filename='Q2/Q2 - Stabilité sur ensemble d entrainement',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensemble d entrainement', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )
-
-        err = error(train_df_prepare, weights[-1])
-        print("last erreur d'apprentissage minimerror : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
-
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
-
-        nl()
-        print("-"*25, "TEST SUR test_df_prepare", "-"*25)
-        E_g = error(test_df_prepare, weights[-1])
-    
-
-        print("Erreur de généralisation :", E_g)
-
-
-    if if_question_2_3:
-
-        complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
-    
-        w = np.array(f_init_Hebb(complete_df_prepare, [1000, 1000]))
-        w = w / np.linalg.norm(w)
-
-        print("Initial weights w:", w)
-
-
-        nl()
-        maxIter = 5000
-
-        eta = 0.0001
-
-        temp=0.25
-        temp_target = 0.001
-
-        grad_stop_pos = 0
-        grad_stop_neg = -10
-
-        # Unpack the two lists directly
-        weights, temps, gammas, errors = minim_error_2_temp(complete_df_prepare, w, 
-                                                         maxIter=maxIter, eta=eta,
-                                                         temp_init=temp, ratio_beta=14)
-
-        weight_norms = [np.linalg.norm(w) for w in weights]
-
-        viz = PerceptronVisualizer(complete_df_prepare, weights, 
-                            (temps, "Temperature"), 
-                            (gammas, "Mean Gamma"),
-                            (errors, "Error"),
-                            (weight_norms, "Weight Norm"),
-                            show_plot=False)
-        
-
-        
-        viz.save_tracks_separately(prefix="Q2_test/Q2_2 - Train+Test - ")
-
-        stabilites_all = []
-        stabilites_paires = stabilites(complete_df_prepare, weights[-1])
-        
-        for paire in stabilites_paires:
-            stabilites_all.append(paire[1])
-        
-        draw_curve_and_save(
-            stabilites_all, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensembles d entrainement + test (L_train + L_test)", 
-            filename='Q2_test/Q2_2 - Stabilité sur ensembles d entrainement + test',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensembles d entrainement + test', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )
-
-        err = error(complete_df_prepare, weights[-1])
-        print("last erreur d'apprentissage minimerror sur Ensembles d'entrainement + test : ", err)
-        min_err = min(errors)
-        best_iteration = errors.index(min_err)   
-
-        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
-    
-    
-    if if_question_1_0:
-        print("-"*25, "QUESTION 1", "-"*25)
+    if if_question_1_1:
+        print("-"*25, "QUESTION 1_1", "-"*25)
+        print("Minimerror avec recuit deterministe - Entraintement sur L_Train et Test sur L_Test")
         print("train_df_prepare")
         print(train_df_prepare)
         print("test_df_prepare")
@@ -2372,6 +1656,18 @@ if __name__=="__main__":
 
         grad_stop_pos = 0
         grad_stop_neg = -10
+
+        print(f"eta: {eta}")
+        print(f"maxIter: {maxIter}")
+        
+        print(f"temp départ: {temp}")
+        print(f"temp_target: {temp_target}")
+        print("Règle de recuit : Décroissance exponentielle : temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)")
+        
+        print(f"Seuil de hard cut numérique pour le calcul du gradient (> 0) : {grad_stop_pos}")
+        print(f"Seuil de hard cut numérique pour le calcul du gradient (< 0) : {grad_stop_neg}")
+        nl()
+        
 
         # Unpack the two lists directly
         weights, temps, gammas, errors = minim_error_avec_recuit(train_df_prepare, w, 
@@ -2391,7 +1687,7 @@ if __name__=="__main__":
         
 
         
-        viz.save_tracks_separately(prefix="Q1/Q1 - ")
+        viz.save_tracks_separately(prefix="Q1_1/Q1_1 - ")
 
         stabilites_train = []
         stabilites_paires = stabilites(train_df_prepare, weights[-1])
@@ -2403,12 +1699,18 @@ if __name__=="__main__":
             stabilites_train, 
             label_text='Stabilité', 
             plot_title="Stabilité gamma sur Ensemble d entrainement (L_train)", 
-            filename='Q1/Q1 - Stabilité sur ensemble d entrainement',
+            filename='Q1_1/Q1_1 - Stabilité sur ensemble d entrainement',
             color='blue', 
             xlabel='Patrons', 
             ylabel='Stabilité gamma sur Ensemble d entrainement', 
             linewidth=2,
             scatter_or_plot='scatter'
+        )
+
+        df_weights = display_and_save_weights_table(
+            weights[-1],
+            filename="Q1_1/Q1_1_Poids_Perceptron.png",
+            title="Q1_1 - Poids du Perceptron après Entraînement"
         )
 
         err = error(train_df_prepare, weights[-1])
@@ -2423,10 +1725,10 @@ if __name__=="__main__":
         E_g = error(test_df_prepare, weights[-1])
 
         print("Erreur de généralisation :", E_g)
-
-        #L'impression du perceptron weights[-1]
         
-    if if_question_1_1:
+    if if_question_1_2:
+        print("-"*25, "QUESTION 1_2", "-"*25)
+        print("Minimerror avec recuit deterministe - Entraintement sur L_Train+L_Test")
         complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
     
         w = np.array(f_init_Hebb(complete_df_prepare, [1000, 1000]))
@@ -2446,8 +1748,20 @@ if __name__=="__main__":
         grad_stop_pos = 0
         grad_stop_neg = -10
 
+
+        print(f"eta: {eta}")
+        print(f"maxIter: {maxIter}")
+        
+        print(f"temp départ: {temp}")
+        print(f"temp_target: {temp_target}")
+        print("Règle de recuit : Décroissance exponentielle : temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)")
+        
+        print(f"Seuil de hard cut numérique pour le calcul du gradient (> 0) : {grad_stop_pos}")
+        print(f"Seuil de hard cut numérique pour le calcul du gradient (< 0) : {grad_stop_neg}")
+        nl()
+
         # Unpack the two lists directly
-        weights, temps, gammas, errors, expansion_depth = minim_error_avec_recuit_test(complete_df_prepare, w, 
+        weights, temps, gammas, errors = minim_error_avec_recuit(complete_df_prepare, w, 
                                                          maxIter=maxIter, eta=eta,
                                                          temp=temp, temp_target=temp_target,
                                                          grad_stop_pos=grad_stop_pos,
@@ -2464,7 +1778,7 @@ if __name__=="__main__":
         
 
         
-        viz.save_tracks_separately(prefix="Q1_test/Q1_1 - Train+Test - ")
+        viz.save_tracks_separately(prefix="Q1_2/Q1_2 - Train+Test - ")
 
         stabilites_all = []
         stabilites_paires = stabilites(complete_df_prepare, weights[-1])
@@ -2476,7 +1790,308 @@ if __name__=="__main__":
             stabilites_all, 
             label_text='Stabilité', 
             plot_title="Stabilité gamma sur Ensembles d entrainement + test (L_train + L_test)", 
-            filename='Q1_test/Q1_1 - Stabilité sur ensembles d entrainement + test',
+            filename='Q1_2/Q1_2 - Stabilité sur ensembles d entrainement + test',
+            color='blue', 
+            xlabel='Patrons', 
+            ylabel='Stabilité gamma sur Ensembles d entrainement + test', 
+            linewidth=2,
+            scatter_or_plot='scatter'
+        )
+
+        df_weights = display_and_save_weights_table(
+            weights[-1],
+            filename="Q1_2/Q1_2_Poids_Perceptron.png",
+            title="Q1_2 - Poids du Perceptron après Entraînement"
+        )
+
+        err = error(complete_df_prepare, weights[-1])
+        print("last erreur d'apprentissage minimerror sur Ensembles d'entrainement + test : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+    if if_question_2_0:
+        print("-"*25, "QUESTION 2_0", "-"*25)
+        print("Minimerror avec deux températures Beta+ / Beta- - Test sur un ensemble aléatoire garanti LS avec technique du Perceptron Professeur")
+        seed_1 = 45
+        seed_2 = 99
+        seed_3 = 21
+
+        nbPoints = 200
+        N = 2
+        bornes = [-20,20]
+        print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
+        X_ens = create_points(nbPoints, N, bornes, seed_1)
+
+        w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
+
+
+        L_ens = L_prof(X_ens, w_prof)
+
+       
+        w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+        print("Initial weights w:", w)
+
+        nl()
+        
+        maxIter = 1000
+        eta = 0.001
+        temp=0.25
+        ratio_temperature = 1.0
+
+        print(f"eta: {eta}")
+        print(f"maxIter: {maxIter}")
+        
+        print(f"temp départ: {temp}")
+        print(f"Ratio beta + / beta -: {ratio_temperature}")
+        print("Règle de recuit : Décroissance exponentielle : temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)")
+
+
+        nl()
+
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_2_temp(L_ens, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=ratio_temperature)
+        
+        viz = PerceptronVisualizer(L_ens, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error")
+                            )
+
+        err = error(L_ens, weights[-1])
+        print("last erreur d'apprentissage minimerror 2T : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror 2T: {min_err} at iteration {best_iteration}")
+
+        err = error(L_ens, w_prof)
+        print("erreur d'apprentissage teacher : ", err)
+    
+        viz.save_tracks_separately(prefix="Q2_0/Q2_0 - ")
+        viz.save_final_2d_plot("Q2_0/Q2_0 - final_result.png")
+        viz.save_training_video("Q2_0/Q2_0 - perceptron_training.mp4", fps=15)
+
+        df_weights = display_and_save_weights_table(
+            weights[-1],
+            filename="Q2_0/Q2_0_Poids_Perceptron.png",
+            title="Q2_0 - Poids du Perceptron après Entraînement"
+        )
+    if if_question_2_1:
+        print("-"*25, "QUESTION 2_1", "-"*25)
+        print("Minimerror avec deux températures Beta+ / Beta- - Test sur un ensemble aléatoire garanti NON LS avec technique du Perceptron Professeur + Inversion")
+        seed_1 = 45
+        seed_2 = 99
+        seed_3 = 21
+
+        nbPoints = 200
+        N = 2
+        bornes = [-20,20]
+        print("Points générés pour nbPoints =", nbPoints, ", N =", N, ", bornes =", bornes, ", seed =", seed)
+        X_ens = create_points(nbPoints, N, bornes, seed_1)
+
+        w_prof =init_perceptron_prof_in_bounds(X_ens, seed_2)
+
+        L_ens = L_prof(X_ens, w_prof)
+
+        facter_bruit = 20
+        inversedExemple = int(nbPoints/facter_bruit)
+        print("inversedExemple :", inversedExemple)
+        L_ens = make_L_non_LS(L_ens, inversedExemple, seed_3)
+        
+        w = np.array(f_init_Hebb(L_ens, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+        print("Initial weights w:", w)
+
+        nl()
+
+        maxIter = 1000
+        eta = 0.001
+        temp=0.25
+        ratio_temperature = 1.0
+
+        print(f"eta: {eta}")
+        print(f"maxIter: {maxIter}")
+        
+        print(f"temp départ: {temp}")
+        print(f"Ratio beta + / beta -: {ratio_temperature}")
+        print("Règle de recuit : Décroissance exponentielle : temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)")
+
+
+        nl()
+
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_2_temp(L_ens, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=ratio_temperature)
+        
+        viz = PerceptronVisualizer(L_ens, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error")
+                            )
+        
+        
+
+        err = error(L_ens, weights[-1])
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+        err = error(L_ens, w_prof)
+        print("erreur d'apprentissage teacher : ", err)
+    
+        viz.save_tracks_separately(prefix="Q2_1/Q2_1 - ")
+        viz.save_final_2d_plot("Q2_1/Q2_1 - final_result.png")
+        viz.save_training_video("Q2_1/Q2_1 - perceptron_training.mp4", fps=15)
+
+        df_weights = display_and_save_weights_table(
+            weights[-1],
+            filename="Q2_1/Q2_1_Poids_Perceptron.png",
+            title="Q2_1 - Poids du Perceptron après Entraînement"
+        )
+
+    if if_question_2_2:
+        print("-"*25, "QUESTION 2_2", "-"*25)
+        print("Minimerror avec deux températures Beta+ / Beta- Entraînement sur ensemble L_Train et test sur ensemble L_Test")
+        
+        print("train_df_prepare")
+        print(train_df_prepare)
+        print("test_df_prepare")
+        print(test_df_prepare)
+        nl()
+
+        w = np.array(f_init_Hebb(train_df_prepare, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+
+        print("Initial weights w:", w)
+
+
+        nl()
+
+        maxIter = 4000
+        eta = 0.0001
+        temp=0.25
+        ratio_temperature = 1.18
+
+        print(f"eta: {eta}")
+        print(f"maxIter: {maxIter}")
+        
+        print(f"temp départ: {temp}")
+        print(f"Ratio beta + / beta -: {ratio_temperature} - Ratio de convergence optimale - Déterminé empiriquement en testant plusieurs valeurs")
+        print("Règle de recuit : Décroissance exponentielle : temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)")
+
+
+        weights, temps, gammas, errors = minim_error_2_temp(train_df_prepare, w, maxIter=maxIter, eta=eta, temp_init=temp, ratio_beta=ratio_temperature)
+
+        weight_norms = [np.linalg.norm(w) for w in weights]
+
+    
+        viz = PerceptronVisualizer(train_df_prepare, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error"),
+                            (weight_norms, "Weight Norm"),
+                            show_plot=False)
+        
+
+        
+        viz.save_tracks_separately(prefix="Q2_2/Q2_2 - ")
+
+        stabilites_train = []
+        stabilites_paires = stabilites(train_df_prepare, weights[-1])
+        
+        for paire in stabilites_paires:
+            stabilites_train.append(paire[1])
+        
+        draw_curve_and_save(
+            stabilites_train, 
+            label_text='Stabilité', 
+            plot_title="Stabilité gamma sur Ensemble d entrainement (L_train)", 
+            filename='Q2_2/Q2_2 - Stabilité sur ensemble d entrainement',
+            color='blue', 
+            xlabel='Patrons', 
+            ylabel='Stabilité gamma sur Ensemble d entrainement', 
+            linewidth=2,
+            scatter_or_plot='scatter'
+        )
+
+        err = error(train_df_prepare, weights[-1])
+        print("last erreur d'apprentissage minimerror : ", err)
+        min_err = min(errors)
+        best_iteration = errors.index(min_err)   
+
+        print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
+
+        nl()
+        print("-"*25, "TEST SUR test_df_prepare", "-"*25)
+        E_g = error(test_df_prepare, weights[-1])
+    
+
+        print("Erreur de généralisation :", E_g)
+
+        df_weights = display_and_save_weights_table(
+            weights[-1],
+            filename="Q2_2/Q2_2_Poids_Perceptron.png",
+            title="Q2_2 - Poids du Perceptron après Entraînement"
+        )
+
+    if if_question_2_3:
+        print("-"*25, "QUESTION 2_3", "-"*25)
+        print("Minimerror avec deux températures Beta+ / Beta- Entraînement sur ensemble L_Train+L_Test")
+        
+        complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
+    
+        w = np.array(f_init_Hebb(complete_df_prepare, [1000, 1000]))
+        w = w / np.linalg.norm(w)
+
+        print("Initial weights w:", w)
+
+
+        nl()
+        maxIter = 5000
+        eta = 0.0001
+        temp = 0.25
+        ratio_temperature = 14
+    
+        print(f"eta: {eta}")
+        print(f"maxIter: {maxIter}")
+        
+        print(f"temp départ: {temp}")
+        print(f"Ratio beta + / beta -: {ratio_temperature} - Ratio de convergence optimale - Déterminé empiriquement en testant plusieurs valeurs")
+        print("Règle de recuit : Décroissance exponentielle : temp_decay_factor = (temp_target / temp) ** (1.0/maxIter)")
+
+        # Unpack the two lists directly
+        weights, temps, gammas, errors = minim_error_2_temp(complete_df_prepare, w, 
+                                                         maxIter=maxIter, eta=eta,
+                                                         temp_init=temp, ratio_beta=ratio_temperature)
+
+        weight_norms = [np.linalg.norm(w) for w in weights]
+
+        viz = PerceptronVisualizer(complete_df_prepare, weights, 
+                            (temps, "Temperature"), 
+                            (gammas, "Mean Gamma"),
+                            (errors, "Error"),
+                            (weight_norms, "Weight Norm"),
+                            show_plot=False)
+        
+
+        
+        viz.save_tracks_separately(prefix="Q2_3/Q2_3 - Train+Test - ")
+
+        stabilites_all = []
+        stabilites_paires = stabilites(complete_df_prepare, weights[-1])
+        
+        for paire in stabilites_paires:
+            stabilites_all.append(paire[1])
+        
+        draw_curve_and_save(
+            stabilites_all, 
+            label_text='Stabilité', 
+            plot_title="Stabilité gamma sur Ensembles d entrainement + test (L_train + L_test)", 
+            filename='Q2_3/Q2_3 - Stabilité sur ensembles d entrainement + test',
             color='blue', 
             xlabel='Patrons', 
             ylabel='Stabilité gamma sur Ensembles d entrainement + test', 
@@ -2491,446 +2106,8 @@ if __name__=="__main__":
 
         print(f"Minimum error found by Minimerror: {min_err} at iteration {best_iteration}")
 
-
-
-    if if_question_2_et_3:
-        #QUESTION 2 et 3
-        #L'algorithme online converge en moins d'itération que l'algorithme batch
-        training_algo = perceptron_online
-        # Question 2
-        question_tag_exo_2 = 'Q2'
-        trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df,
-                                                                                                                        training_algo=training_algo, 
-                                                                                                                        train=train_df, 
-                                                                                                                        test=test_df, 
-                                                                                                                        train_prepare=train_df_prepare,
-                                                                                                                        test_prepare=test_df_prepare,
-                                                                                                                        question_tag=question_tag_exo_2)
-        
-        df_weights = display_and_save_weights_table(
-            trained_perceptron,
-            filename="Q2_et_3/Q2_Poids_Perceptron.png",
-            title="Q2 - Poids du Perceptron après Entraînement"
-        )
-
-        #Calcul des stabilités
-        stabilites_train = stabilites_list #Retourné par la fonction d'entrainement
-        draw_curve_and_save(
-            stabilites_train, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble de entrainement", 
-            filename='Q2_et_3/Q2 - Stabilité sur ensemble de entrainement',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensemble de entrainement', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )        
-        
-        stabilites_test = []
-        stabilites_paires = stabilites(test_df_prepare, trained_perceptron)
-        
-        for paire in stabilites_paires:
-            stabilites_test.append(paire[1])
-        
-        draw_curve_and_save(
-            stabilites_test, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble de test", 
-            filename='Q2_et_3/Q2 - Stabilité sur ensemble de test',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensemble de test', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )
-
-        # Question 3
-        question_tag_exo_3 = 'Q3'
-        trained_perceptron, training_error, generalisation_error, stabilites_paires, stabilites_list, = run_training_exo_1(data=data_df,
-                                                                                                                        training_algo=training_algo,  
-                                                                                                                        train=test_df, 
-                                                                                                                        test=train_df, 
-                                                                                                                        train_prepare=test_df_prepare,
-                                                                                                                        test_prepare=train_df_prepare,
-                                                                                                                        question_tag=question_tag_exo_3)
-        
-        df_weights = display_and_save_weights_table(
-            trained_perceptron,
-            filename="Q3_Poids_Perceptron.png",
-            title="Q3 - Poids du Perceptron après Entraînement"
-        )
-        
-        #Calcul des stabilités
-        stabilites_train = stabilites_list #Retourné par la fonction d'entrainement
-        draw_curve_and_save(
-            stabilites_train, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble de entrainement (L_test)", 
-            filename='Q2_et_3/Q3 - Stabilité sur ensemble de entrainement',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensemble de entrainement', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )        
-        
-        stabilites_test = []
-        stabilites_paires = stabilites(train_df_prepare, trained_perceptron)
-        
-        for paire in stabilites_paires:
-            stabilites_test.append(paire[1])
-        
-        draw_curve_and_save(
-            stabilites_test, 
-            label_text='Stabilité', 
-            plot_title="Stabilité gamma sur Ensemble de test (L_train)", 
-            filename='Q2_et_3/Q3 - Stabilité sur ensemble de test',
-            color='blue', 
-            xlabel='Patrons', 
-            ylabel='Stabilité gamma sur Ensemble de test', 
-            linewidth=2,
-            scatter_or_plot='scatter'
-        )
-    
-    # # ========================================================================
-    # # PARTIE II: Algorithme Pocket
-    # # ========================================================================
-
-    if if_question_4:
-        print(f"\n{'='*80}")
-        print("PARTIE II: ALGORITHME POCKET")
-        print(f"{'='*80}\n")
-        # Test avec différentes initialisations et etas
-        etas = [0.01, 0.1, 0.5, 1.0]
-        initialization_test_case = [f_init_rand, f_init_Hebb]  
-        
-        # Arrêter quand Ea <= 5
-        target_error = 5 
-
-        results_pocket = []
-        perceptrons_trained = []
-        
-        # Test en échangeant train et test
-        print(f"\n{'='*60}")
-        print("Pocket: Apprentissage sur 'train', test sur 'test'")
-        print(f"{'='*60}\n")
-
-        for initialization in initialization_test_case:
-            for eta in etas:
-                result = question_4(train_df_prepare, 
-                                    test_df_prepare,
-                                    initialization,
-                                    target_error,
-                                    eta)
-
-                results_pocket.append({
-                    'init': result[0],
-                    'eta': result[1],
-                    'Ea': result[2],
-                    'Eg': result[3],
-                    'iterations': result[4],
-                    'Ens. Train': 'Train',
-                    'Ens. Test': 'Test',
-                })
-                perceptrons_trained.append(result[6])
-                
-        # Test en échangeant train et test
-        print(f"\n{'='*60}")
-        print("Pocket: Apprentissage sur 'test', test sur 'train'")
-        print(f"{'='*60}\n")
-        
-        for initialization in initialization_test_case:
-            for eta in etas:
-                result = question_4(test_df_prepare,
-                                    train_df_prepare, 
-                                    initialization,
-                                    target_error,
-                                    eta)
-
-                results_pocket.append({
-                    'init': result[0],
-                    'eta': result[1],
-                    'Ea': result[2],
-                    'Eg': result[3],
-                    'iterations': result[4],
-                    'Ens. Train': 'Test',
-                    'Ens. Test': 'Train',
-                })
-                perceptrons_trained.append(result[6])
-                
-
-        
-        # Tableau récapitulatif
-        print(f"\n{'='*80}")
-        print("TABLEAU RÉCAPITULATIF - ALGORITHME POCKET")
-        print(f"{'='*80}")
-        print(f"{'Init':<10} {'Eta':<8} {'Ea':<8} {'Eg':<8} {'Itérations':<12} {'Ens. Train'} {'Ens. Test'}")
-        print("-" * 80)
-        for r in results_pocket:
-            train_set = r.get('train_set', 'train')
-            print(f"{r['init']:<10} {r['eta']:<8.2f} {r['Ea']:<8} {r['Eg']:<8} {r['iterations']:<12} {r['Ens. Train']:<12} {r['Ens. Test']}")
-        print(f"{'='*80}\n")
-        
-        pocket_column_map = {
-            'init':       'Initialisation',
-            'eta':        'Eta (η)',                 
-            'Ea':         'Erreur Appr. (Ea)',       
-            'Eg':         'Erreur Gén. (Eg)',        
-            'iterations': 'Itérations',
-            'Ens. Train': 'Ensemble d\'Entraînement', 
-            'Ens. Test':  'Ensemble de Test'         
-        }
-        display_and_save_results_table(results_pocket, 
-                                       pocket_column_map,
-                                       filename='Q4/Q4_pocket_results_summary.png',
-                                       title='Résumé des résultats de l\'algorithme Pocket')
-        
-        display_and_save_matrix_table(perceptrons_trained,
-                                      "Q4/Q4_Poids perceptrons entrainés Pocket.png",
-                                      "Poids perceptrons entrainés Pocket",
-                                      "Poid",
-                                      "Perceptron test case")
-    
-        #Evaluation des stabilité de généralisation sur les 104 exemple
-        #de l'ensemble de généralisation :
-
-       # Matrice 1: Stabilités de généralisation sur l'ensemble de test (perceptrons 0-7)
-        stabilites_generalisation_sur_test_matrix = []  # 104 exemples × 8 perceptrons
-
-        # Matrice 2: Stabilités de généralisation sur l'ensemble de train (perceptrons 8-15)  
-        stabilites_generalisation_sur_train_matrix = []  # 104 exemples × 8 perceptrons
-
-        print("Construction des matrices de stabilités de généralisation...")
-
-        # Pour les 8 premiers perceptrons (entraînés sur train, testés sur test)
-        print(f"\n1. Perceptrons 1-8 (entraînés sur train, testés sur test)")
-        for i in range(8):
-            perceptron = perceptrons_trained[i]
-            print(f"  Perceptron {i+1}/8...")
-            
-            stabilites_paires = stabilites(test_df_prepare, perceptron)
-            print(f"    {len(stabilites_paires)} stabilités calculées")
-            
-            if i == 0:
-                # Initialiser la matrice test (104 × 8)
-                for paire in stabilites_paires:
-                    stabilites_generalisation_sur_test_matrix.append([paire[1]])  # Ligne avec 1 valeur
-            else:
-                # Ajouter aux lignes existantes
-                for idx, paire in enumerate(stabilites_paires):
-                    stabilites_generalisation_sur_test_matrix[idx].append(paire[1])
-
-        # Pour les 8 derniers perceptrons (entraînés sur test, testés sur train)
-        print(f"\n2. Perceptrons 9-16 (entraînés sur test, testés sur train)")
-        for i in range(8, 16):
-            perceptron = perceptrons_trained[i]
-            print(f"  Perceptron {i+1}/16...")
-            
-            stabilites_paires = stabilites(train_df_prepare, perceptron)
-            print(f"    {len(stabilites_paires)} stabilités calculées")
-            
-            if i == 8:
-                # Initialiser la matrice train (104 × 8)
-                for paire in stabilites_paires:
-                    stabilites_generalisation_sur_train_matrix.append([paire[1]])  # Ligne avec 1 valeur
-            else:
-                # Ajouter aux lignes existantes
-                for idx, paire in enumerate(stabilites_paires):
-                    stabilites_generalisation_sur_train_matrix[idx].append(paire[1])
-
-        # Vérifications
-        print(f"\n{'='*50}")
-        print("RÉSUMÉ DES MATRICES DE STABILITÉS DE GÉNÉRALISATION")
-        print(f"{'='*50}")
-        print(f"Matrice sur TEST (perceptrons 1-8 sur exemples test):")
-        print(f"  - Dimensions: {len(stabilites_generalisation_sur_test_matrix)} × {len(stabilites_generalisation_sur_test_matrix[0]) if stabilites_generalisation_sur_test_matrix else 0}")
-        print(f"  - Attendue: 104 × 8")
-
-        print(f"\nMatrice sur TRAIN (perceptrons 9-16 sur exemples train):")
-        print(f"  - Dimensions: {len(stabilites_generalisation_sur_train_matrix)} × {len(stabilites_generalisation_sur_train_matrix[0]) if stabilites_generalisation_sur_train_matrix else 0}")
-        print(f"  - Attendue: 104 × 8")
-
-        # Afficher les matrices
-        if stabilites_generalisation_sur_test_matrix:
-            display_and_save_matrix_table(
-                stabilites_generalisation_sur_test_matrix, 
-                "Q4/Q4_Stabilites_generalisation_des_8_perceptrons_entraines_sur_train_testes_sur_test.png", 
-                "Stabilités de généralisation des 8 perceptrons (entraînés sur train, testés sur test)",
-                "Perceptron",  # Maintenant ce sera les lignes (après transposition)
-                "Patron",      # Maintenant ce sera les colonnes (après transposition)
-                batch_size=50  # Vous pouvez ajuster si nécessaire
-            )
-
-        if stabilites_generalisation_sur_train_matrix:
-            display_and_save_matrix_table(
-                stabilites_generalisation_sur_train_matrix, 
-                "Q4/Q4_Stabilites_generalisation_des_8_perceptrons_entraines_sur_test_testes_sur_train.png", 
-                "Stabilités de généralisation des 8 perceptrons (entraînés sur test, testés sur train)",
-                "Perceptron",  # Maintenant ce sera les lignes (après transposition)
-                "Patron",      # Maintenant ce sera les colonnes (après transposition)
-                batch_size=50
-    )
-            
-    # ========================================================================
-    # PARTIE III: Test si L (train+test) est linéairement séparable
-    # ========================================================================
-
-    # Question 5
-
-    if if_question_5:
-        question_tag_exo_5 = 'EXERCICE 5'
-        
-        training_algo = perceptron_online
-        maxIters = [10000, 20000, 30000, 50000, 100000, 200000, 500000]
-
-        perceptrons_trained = []
-        erreurs = []
-        for i, maxIter in enumerate(maxIters) :
-            print(f"{question_tag_exo_5} - Test case {i}")
-            perceptron_entraine, _, err, complete_df_prepare = question_5(train_df_prepare,
-                                                    test_df_prepare,
-                                                    training_algo,
-                                                    maxIter)
-            perceptrons_trained.append(perceptron_entraine)
-            erreurs.append(err)
-            n()
-        
-        display_and_save_matrix_table(perceptrons_trained, "Q5\Q. 5 - Poids perceptrons sur l'ensemble entier.png", "Q. 5 - Poids perceptrons sur l'ensemble entier", "Poid", "Perceptron test case")
-
-        stabilites_matrix = []  # 208 exemples × 3 perceptrons
-        
-        #Evaluation des stabilité (Par perceptron, sur chaque patron)
-        for i in range(len(perceptrons_trained)):
-            perceptron = perceptrons_trained[i]
-            
-            stabilites_paires = stabilites(complete_df_prepare, perceptron)
-            print(f"    {len(stabilites_paires)} stabilités calculées")
-            
-            if i == 0:
-                # Initialiser la matrice train (104 × 8)
-                for paire in stabilites_paires:
-                    stabilites_matrix.append([paire[1]])  # Ligne avec 1 valeur
-            else:
-                # Ajouter aux lignes existantes
-                for idx, paire in enumerate(stabilites_paires):
-                    stabilites_matrix[idx].append(paire[1])
-        
-        display_and_save_matrix_table(stabilites_matrix, "Q5\Q5_Stabilites des perceptrons entrainés sur l'ensemble complet.png", 
-                                      "Stabilites des perceptrons entrainés sur l'ensemble complet", "Perceptron", "Patron")
-
-        for i, err in enumerate(erreurs):
-            print(f'Iterations {maxIters[i]} : Erreur = {err}/{len(complete_df_prepare)} = {err/len(complete_df_prepare)*100:.2f}%')        
-        n()
-        print("CONCLUSION")
-        print("L'algortihme ne converge jamais : on en conclut que " \
-            "L n'est pas linéairement séparable. En effet, P = 208 > 2N = 120" \
-            "=> l'existence d'un hyperplan séparateur n'est pas garantie.")
-    
-
-    # # ========================================================================
-    # # PARTIE IV: Early Stopping
-    # # ========================================================================
-
-    if if_question_6:
-        print(f"\n{'='*80}")
-        print("PARTIE IV: EARLY STOPPING")
-        print(f"{'='*80}\n")
-        
-        # Répéter l'expérience plusieurs fois pour obtenir des statistiques
-        n_experiments = 5
-        eta = 0.1
-        results_early_stopping = []
-        
-        perceptrons_trained=[]
-
-        for exp in range(n_experiments):
-            print(f"\n--- Expérience {exp+1}/{n_experiments} ---")
-            
- 
-            result = question_6(train_df_prepare, test_df_prepare, eta)
-
-            results_early_stopping.append({
-                'Ea': result[0],
-                'Ev': result[1],
-                'Et': result[2],
-                'iterations': result[3]
-            })
-            perceptrons_trained.append(result[4])
-            
-        #Plot de l'évolution des erreurs de la dernière expérience
-        train_errors_ES = result[5]
-        val_errors_ES = result[6]
-        complete_df_prepare = pd.concat([train_df_prepare, test_df_prepare], ignore_index=True)
-    
-        display_and_save_matrix_table(perceptrons_trained, "Q6\Q. 6 - Poids perceptrons pour early stopping.png", "Q. 6 - Poids perceptrons pour early stopping", "Poid", "Perceptron test case")
-        
-        #Evaluation des stabilité (Par perceptron, sur chaque patron)
-        stabilites_matrix = []
-        
-        for i in range(len(perceptrons_trained)):
-            perceptron = perceptrons_trained[i]
-            
-            stabilites_paires = stabilites(complete_df_prepare, perceptron)
-            print(f"    {len(stabilites_paires)} stabilités calculées")
-            
-            if i == 0:
-                # Initialiser la matrice train (104 × 8)
-                for paire in stabilites_paires:
-                    stabilites_matrix.append([paire[1]])  # Ligne avec 1 valeur
-            else:
-                # Ajouter aux lignes existantes
-                for idx, paire in enumerate(stabilites_paires):
-                    stabilites_matrix[idx].append(paire[1])
-
-        display_and_save_matrix_table(stabilites_matrix, "Q6\Q. 6 - Stabilites des perceptrons entrainés avec Early Stopping.png", 
-                                      "Q. 6 - Stabilites des perceptrons entrainés avec Early Stopping", "Stabilité perceptron", "Patron")
-
-
-        # Statistiques
-        print(f"\n{'='*80}")
-        print("STATISTIQUES - EARLY STOPPING (moyenne sur {} expériences)".format(n_experiments))
-        print(f"{'='*80}")
-        
-        mean_Ea = np.mean([r['Ea'] for r in results_early_stopping])
-        mean_Ev = np.mean([r['Ev'] for r in results_early_stopping])
-        mean_Et = np.mean([r['Et'] for r in results_early_stopping])
-        std_Ea = np.std([r['Ea'] for r in results_early_stopping])
-        std_Ev = np.std([r['Ev'] for r in results_early_stopping])
-        std_Et = np.std([r['Et'] for r in results_early_stopping])
-        
-        print(f"Ea (moyenne): {mean_Ea:.2f} ± {std_Ea:.2f}")
-        print(f"Ev (moyenne): {mean_Ev:.2f} ± {std_Ev:.2f}")
-        print(f"Et (moyenne): {mean_Et:.2f} ± {std_Et:.2f}")
-        print(f"{'='*80}\n")
-        
-        # Graphique de l'évolution des erreurs (dernière expérience)
-        plt.figure(figsize=(12, 6))
-        plt.plot(train_errors_ES, label='Erreur d\'apprentissage (LA)', marker='o', markersize=3)
-        plt.plot(val_errors_ES, label='Erreur de validation (LV)', marker='s', markersize=3)
-        plt.xlabel('Itérations')
-        plt.ylabel('Erreur')
-        plt.title("Early Stopping - Évolution en fonction des itérations des erreurs d'entraînement et de validation")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig("Q6/Q6_Comparaison_err_entraînement_et_validation", bbox_inches='tight', dpi=300)            
-        
-        early_stopping_column_map = {
-            # Clé dans results_early_stopping : Nom d'affichage dans le tableau
-            'Ea':           'Erreur d\'Apprentissage (Ea)',
-            'Ev':           'Erreur de Validation (Ev)',
-            'Et':           'Erreur de Test (Et)',  # Ou 'Erreur de Généralisation (Et)' si vous préférez
-            'iterations':   'Itérations'
-        }
-        display_and_save_results_table(results_early_stopping, 
-                                       early_stopping_column_map,
-                                       filename='Q6\Q6_results_early_stopping_summary.png',
-                                       title='Résumé des résultats des test avec Early Stopping')
-    
-
-
     print("\n" + "="*80)
-    print("FIN DU TP2")
+    print("FIN DU TP3")
     print("="*80)
 
 
